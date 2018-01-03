@@ -4,7 +4,11 @@ import java.security.AlgorithmParameters;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
 import java.security.PublicKey;
+import java.security.Signature;
+import java.security.spec.EncodedKeySpec;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
@@ -16,6 +20,12 @@ import javax.crypto.spec.DHParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
+import sun.security.pkcs10.PKCS10;
+
 public class ServerSecurity {
 	
 	DHParameterSpec dhParamFromServerPubKey;
@@ -24,7 +34,7 @@ public class ServerSecurity {
 	byte[] encodedParams;
 	
 
-
+	//Initiates Diffie-Hellman key exchange protocol
 	public byte[] initiateDH() throws Exception{
         
         KeyPairGenerator serverKpairGen = KeyPairGenerator.getInstance("DH");
@@ -39,6 +49,7 @@ public class ServerSecurity {
         return serverPubKeyEnc;
 	}
 	
+	//Function that accepts the key given by the client
 	public void acceptKey(byte[] clientPubKeyEnc) throws Exception {
 		KeyFactory serverKeyFac = KeyFactory.getInstance("DH");
         X509EncodedKeySpec x509KeySpec = new X509EncodedKeySpec(clientPubKeyEnc);
@@ -93,5 +104,43 @@ public class ServerSecurity {
 
 		return jsonEncoded;
 
+	}
+	
+	//Function used to verify if the client message belongs to the original owner
+	public boolean verifyMessage(byte[] message) throws Exception {
+		
+		String cmdAsString = new String(message);
+		JsonElement data =  new JsonParser().parse(cmdAsString);
+		JsonElement ogMessage = data.getAsJsonObject().get("message");
+		JsonElement signedMsg = data.getAsJsonObject().get("signed");
+		JsonElement key = data.getAsJsonObject().get("key");
+			
+		
+		Signature signAlg = Signature.getInstance("NONEwithRSA");
+		KeyFactory keyGen = KeyFactory.getInstance("RSA");
+		EncodedKeySpec publicKey= new X509EncodedKeySpec(Base64.getDecoder().decode(key.getAsString()));
+		PublicKey pub = keyGen.generatePublic(publicKey);
+		
+		signAlg.initVerify(pub);
+		signAlg.update(ogMessage.getAsString().getBytes());
+		
+		return signAlg.verify(Base64.getDecoder().decode(signedMsg.getAsString()));
+		
+	}
+	
+	public String decodeMessage (String message) {
+		
+		String msgDecoded = new String(Base64.getDecoder().decode(message));
+		
+		return msgDecoded;
+	}
+	
+	//Function used to retrieve the message to be decrypted
+	public byte[] readMessage(byte[] message) throws Exception{
+		String cmdAsString = new String(message);
+		JsonElement data =  new JsonParser().parse(cmdAsString);
+		JsonElement ogMessage = data.getAsJsonObject().get("message");	
+		
+		return decodeMessage(ogMessage.getAsString().getBytes());
 	}
 }

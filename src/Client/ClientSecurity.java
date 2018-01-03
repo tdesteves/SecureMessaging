@@ -57,7 +57,6 @@ public class ClientSecurity{
 		clientAgree = KeyAgreement.getInstance("DH");
 		clientAgree.init(clientKeyPair.getPrivate());
 		
-		
 		//Encode public key and send it
 		byte[] clientPubKey = clientKeyPair.getPublic().getEncoded();
 		
@@ -128,6 +127,7 @@ public class ClientSecurity{
 	
 	//Encodes byte arrays (this is for JSON message exchanged)
 	public byte[] encodeJSON (byte[] message) {
+		
 		byte[] jsonEncoded = Base64.getEncoder().encode(message);
 		
 		return jsonEncoded;
@@ -145,35 +145,17 @@ public class ClientSecurity{
 	//Function to sign Message
 	public byte[] signMessage(byte[] message, PrivateKey key) throws Exception {
 		
-		Signature signAlg = Signature.getInstance("NONEwithRSA", "SunPKCS11-PTeID");
-		signAlg.initSign(key);
+		KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+		keyGen.initialize(2048);
+		KeyPair pair = keyGen.generateKeyPair();
+		
+		Signature signAlg = Signature.getInstance("NONEwithRSA");
+		signAlg.initSign(pair.getPrivate());
 		signAlg.update(message);
 		byte[] signedMessage = signAlg.sign();
+		pub=pair.getPublic();
 		
 		return signedMessage;
-	}
-	
-	public byte[] generateMac(byte[] message) {
-		try {
-				
-		    KeyGenerator keyGen = KeyGenerator.getInstance("HmacMD5");
-		    SecretKey key = keyGen.generateKey();
-		    Mac mac = Mac.getInstance(key.getAlgorithm());
-		    mac.init(key);
-		    
-		    // create a digest from the byte array
-		    digest= mac.doFinal(message);
-		    
-  
-		}
-		catch (NoSuchAlgorithmException e) {
-			System.out.println("No Such Algorithm:" + e.getMessage());
-			
-		}
-		catch (InvalidKeyException e) {
-			System.out.println("Invalid Key:" + e.getMessage());
-		}
-		return digest;
 	}
 	
 }

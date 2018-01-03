@@ -88,43 +88,18 @@ class ServerActions implements Runnable {
         		if(length > 0) {
         			message = new byte[length];
         			in.readFully(message, 0, message.length);
-        			byte[] cmd = Server.sec.decodeMessage(message);
-        			//String ogMessage = Server.sec.decryptMessage(test, serverAESKey);
-        			// Parsing the message received
-        			//JsonElement data = new JsonParser().parse(ogMessage);
-        			//if (data.isJsonObject()) {
-        				//return data.getAsJsonObject();
-        			//}
-        			System.out.println("ogMessage: " + cmd);
-        		}
-        		int length2 = in.readInt();
-        		if(length > 0) {
-        			message = new byte[length2];
-        			in.readFully(message, 0, message.length);
-        			byte[] signedMessage = message;
-        			//String ogMessage = Server.sec.decryptMessage(test, serverAESKey);
-        			// Parsing the message received
-        			//JsonElement data = new JsonParser().parse(ogMessage);
-        			//if (data.isJsonObject()) {
-        			//	return data.getAsJsonObject();
-        			//}
-        			System.out.println("Signed: " + signedMessage);
-        		}
-        		int length3 = in.readInt();
-        		if(length > 0) {
-        			message = new byte[length3];
-        			in.readFully(message, 0, message.length);
-        			byte[] pubKey = message;
-        			/*String ogMessage = Server.sec.decryptMessage(test, serverAESKey);
-        			// Parsing the message received
-        			JsonElement data = new JsonParser().parse(ogMessage);
-        			if (data.isJsonObject()) {
-        				return data.getAsJsonObject();
-        			}*/
-        			System.out.println("PubKey: " + pubKey);
-        		}
-        		
-			
+        			//byte[] cmd = Server.sec.decodeMessage(message);
+        			System.out.println("Verificado? : "+ Server.sec.verifyMessage(message));
+        			if(Server.sec.verifyMessage(message)==true) {
+        				String ogMessage = Server.sec.decryptMessage(Server.sec.readMessage(message), serverAESKey);
+            			// Parsing the message received
+            			JsonElement data = new JsonParser().parse(ogMessage);
+            			if (data.isJsonObject()) {
+            				return data.getAsJsonObject();
+            			}
+            			//System.out.println("ogMessage: " + cmd);
+        			}	
+        		}	
 			System.err.print ( "Error while reading command from socket (not a JSON object), connection will be shutdown\n" );
 			return null;
         } catch (Exception e) {
