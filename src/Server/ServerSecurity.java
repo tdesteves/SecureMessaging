@@ -143,4 +143,16 @@ public class ServerSecurity {
 		
 		return decodeMessage(ogMessage.getAsString().getBytes());
 	}
+	
+	public SecretKeySpec decodeStoredKey (String keyEncoded) throws Exception {
+		
+		byte[] key = decodeMessage(keyEncoded.getBytes());
+		
+		//PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(key);
+		//KeyFactory kf = KeyFactory.getInstance("RSA");
+        SecretKeySpec privKey = new SecretKeySpec(key, "AES");
+        System.out.println(privKey);
+		
+		return privKey;
+	}
 }

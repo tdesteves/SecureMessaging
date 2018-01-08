@@ -98,6 +98,7 @@ public class ClientSecurity{
 	public String decryptMessage(byte[] message) throws Exception {
 
 		Cipher resultCipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
+		System.out.println("Chave do cliente: " + clientAESKey);
 		resultCipher.init(Cipher.DECRYPT_MODE, clientAESKey);
 		byte[] recovered = resultCipher.doFinal(message);
 		String result = new String(recovered);

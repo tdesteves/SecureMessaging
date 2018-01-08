@@ -79,6 +79,7 @@ public class Client {
 		         dIn.readFully(message, 0, message.length); // read the message
 		         clientSec.acceptKey(message);
 		         clientSec.doPhase();
+		         System.out.println("Chave acordada: "+ clientSec.clientAESKey);
 		     }
 		     
 		   } catch (UnknownHostException e) {
@@ -95,14 +96,16 @@ public class Client {
 		
 		JsonObject init= new JsonObject();
 		init.addProperty("type", "create");
-		init.addProperty("uuid", user);
+		init.addProperty("uuid", ccReader.getBI()); //Este uuid deve ser dado pelo número do cartão
 		
 		byte[] initSend = clientSec.encryptMessage(init.toString());
 		byte[] signed = clientSec.signMessage(initSend, ccReader.getPrivateKey());
 		sendCommand(initSend, signed, clientSec.pub);
 	
-	
+		
 		int length = dIn.readInt(); // read length of incoming message
+		
+		
 		if (length > 0) {
 			byte[] message = new byte[length];
 			dIn.readFully(message, 0, message.length); // read the message		
@@ -133,8 +136,6 @@ public class Client {
 		cmd.addProperty("message", new String(command));
 		cmd.addProperty("signed",Base64.getEncoder().encodeToString(signedCommand));
 		cmd.addProperty("key", Base64.getEncoder().encodeToString(publicKey.getEncoded()));
-		
-		System.out.println("Mensagem em JSON: " + cmd.toString());
 		
 		byte[] send =cmd.toString().getBytes("UTF-8");
 		
@@ -169,11 +170,19 @@ public class Client {
 		receipt.addProperty("type", "receipt");
 		receipt.addProperty("id", uuid.getAsString());
 		receipt.addProperty("msg", message);
-		receipt.addProperty("receipt", "Vista.");
+		receipt.addProperty("receipt", ccReader.getBI());
 		
-		byte[] sendRecv = clientSec.encryptMessage(receipt.toString());
-		dOut.writeInt(sendRecv.length);
-		dOut.write(sendRecv);
+		byte[] sendReceipt = clientSec.encryptMessage(receipt.toString());
+		
+		JsonObject cmd = new JsonObject();
+		cmd.addProperty("message", new String(sendReceipt));
+		byte[] receiptSigned= clientSec.signMessage(sendReceipt,  ccReader.getPrivateKey());
+		cmd.addProperty("signed",Base64.getEncoder().encodeToString(receiptSigned));
+		cmd.addProperty("key", Base64.getEncoder().encodeToString(clientSec.pub.getEncoded()));
+		
+		byte[] send =cmd.toString().getBytes("UTF-8");
+		dOut.writeInt(send.length);
+		dOut.write(send);
 		dOut.flush();
 	}
 

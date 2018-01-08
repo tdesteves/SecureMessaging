@@ -141,6 +141,17 @@ class ServerControl {
 
         return null;
     }
+    
+    synchronized JsonElement
+    getUserInfo ( int uuid ) {
+        for (UserDescription u: users) {
+            if (Integer.parseInt(u.uuid) == uuid ) {
+                return u.description;
+            }
+        }
+
+        return null;
+    }
 
     synchronized UserDescription
     addUser ( JsonElement description ) {

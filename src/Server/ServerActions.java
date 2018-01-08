@@ -56,6 +56,7 @@ class ServerActions implements Runnable {
 				out.writeInt(toSend.length);
 				out.write(toSend);
 				serverAESKey = sec.serverDoPhase();
+				System.out.println("Chave acordada:"+ serverAESKey);
 			}					
 
 		} catch (Exception e) {
@@ -130,14 +131,16 @@ class ServerActions implements Runnable {
 
         try {
             System.out.print( "Send result: " + msg );
+            System.out.println("Chave ao encriptar :" +  serverAESKey);
             byte[] encryptedMsg = Server.sec.encryptMessage(msg, serverAESKey);
+            System.out.println("A enviar");
             out.writeInt(encryptedMsg.length);
             out.write(encryptedMsg);
         } catch (Exception e ) {}
     }
 
     void
-    executeCommand ( JsonObject data ) {
+    executeCommand ( JsonObject data ) throws Exception {
         JsonElement cmd = data.get( "type" );
         UserDescription me;
 
@@ -159,10 +162,18 @@ class ServerActions implements Runnable {
 
             if (registry.userExists( uuid.getAsString() )) {
                 System.err.println ( "User already exists: " + data );
-                sendResult( null, "\"uuid already exists\"" );
+                //sendResult( null, "\"uuid already exists\"" );
+                JsonElement id = registry.getUserInfo(uuid.getAsInt()).getAsJsonObject().get("id");
+                UserDescription user = new UserDescription( id.getAsInt() , registry.getUserInfo(uuid.getAsInt()));
+                JsonElement key=user.description.getAsJsonObject().get("sec-data");
+                System.out.println("Chave que foi Guardada Codificada:"+ key);
+                serverAESKey = Server.sec.decodeStoredKey(key.getAsString());
+                System.out.println("Chave que foi Guardada Descodificada:"+ serverAESKey);
+                sendResult( "\"result\":\"" + id + "\"", null );
                 return;
             }
-
+            
+            System.out.println("Chave a ser guardada: "+ serverAESKey);
             data.remove ( "type" );
             data.addProperty("sec-data", Base64.getEncoder().encodeToString(serverAESKey.getEncoded()));
             me = registry.addUser( data );
@@ -367,7 +378,12 @@ class ServerActions implements Runnable {
 				return;
 
 			}
-			executeCommand(cmd);
+			try {
+				executeCommand(cmd);
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 
 	}
