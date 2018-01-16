@@ -20,9 +20,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 import com.google.gson.*;
 import com.google.gson.stream.*;
-import com.mysql.fabric.xmlrpc.base.Array;
-import com.mysql.jdbc.Connection;
-import com.mysql.jdbc.Statement;
+
 
 class ServerActions implements Runnable {
 
@@ -129,11 +127,8 @@ class ServerActions implements Runnable {
 
         msg += "}\n";
 
-        try {
-            System.out.print( "Send result: " + msg );
-            System.out.println("Chave ao encriptar :" +  serverAESKey);
+        try {         
             byte[] encryptedMsg = Server.sec.encryptMessage(msg, serverAESKey);
-            System.out.println("A enviar");
             out.writeInt(encryptedMsg.length);
             out.write(encryptedMsg);
         } catch (Exception e ) {}
@@ -160,7 +155,7 @@ class ServerActions implements Runnable {
                 return;
             }
 
-            if (registry.userExists( uuid.getAsString() )) {
+            /*if (registry.userExists( uuid.getAsString() )) {
                 System.err.println ( "User already exists: " + data );
                 //sendResult( null, "\"uuid already exists\"" );
                 JsonElement id = registry.getUserInfo(uuid.getAsInt()).getAsJsonObject().get("id");
@@ -171,9 +166,8 @@ class ServerActions implements Runnable {
                 System.out.println("Chave que foi Guardada Descodificada:"+ serverAESKey);
                 sendResult( "\"result\":\"" + id + "\"", null );
                 return;
-            }
+            }*/
             
-            System.out.println("Chave a ser guardada: "+ serverAESKey);
             data.remove ( "type" );
             data.addProperty("sec-data", Base64.getEncoder().encodeToString(serverAESKey.getEncoded()));
             me = registry.addUser( data );

@@ -33,7 +33,6 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mysql.fabric.xmlrpc.base.Array;
 
 public class ClientSecurity{ 
 
@@ -98,7 +97,6 @@ public class ClientSecurity{
 	public String decryptMessage(byte[] message) throws Exception {
 
 		Cipher resultCipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-		System.out.println("Chave do cliente: " + clientAESKey);
 		resultCipher.init(Cipher.DECRYPT_MODE, clientAESKey);
 		byte[] recovered = resultCipher.doFinal(message);
 		String result = new String(recovered);
@@ -143,18 +141,23 @@ public class ClientSecurity{
 		return toSend;
 	}
 	
-	//Function to sign Message
-	public byte[] signMessage(byte[] message, PrivateKey key) throws Exception {
+	public KeyPair getKeys() throws Exception {
 		
 		KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
 		keyGen.initialize(2048);
 		KeyPair pair = keyGen.generateKeyPair();
 		
-		Signature signAlg = Signature.getInstance("NONEwithRSA");
-		signAlg.initSign(pair.getPrivate());
+		return pair;
+	}
+	
+	//Function to sign Message
+	public byte[] signMessage(byte[] message, PrivateKey key) throws Exception {
+		
+		Signature signAlg = Signature.getInstance("SHA1withRSA");
+		signAlg.initSign(key);
 		signAlg.update(message);
 		byte[] signedMessage = signAlg.sign();
-		pub=pair.getPublic();
+		
 		
 		return signedMessage;
 	}

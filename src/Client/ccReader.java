@@ -31,14 +31,14 @@ public class ccReader {
 		}
 	}
 	
-	public static byte[] getPublicKey() throws Exception{
+	public static PublicKey getPublicKey() throws Exception{
 		Provider p = new sun.security.pkcs11.SunPKCS11( f );
         Security.addProvider(p);
         KeyStore ks = KeyStore.getInstance("PKCS11", "SunPKCS11-PTeID" );
         ks.load(null,null);
         java.security.cert.Certificate c = ks.getCertificate("CITIZEN AUTHENTICATION CERTIFICATE");
         PublicKey pk = c.getPublicKey();
-        return pk.getEncoded();
+        return pk;
 	}
 	
 	public static PrivateKey getPrivateKey() throws Exception{

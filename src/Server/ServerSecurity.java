@@ -116,7 +116,7 @@ public class ServerSecurity {
 		JsonElement key = data.getAsJsonObject().get("key");
 			
 		
-		Signature signAlg = Signature.getInstance("NONEwithRSA");
+		Signature signAlg = Signature.getInstance("SHA1withRSA");
 		KeyFactory keyGen = KeyFactory.getInstance("RSA");
 		EncodedKeySpec publicKey= new X509EncodedKeySpec(Base64.getDecoder().decode(key.getAsString()));
 		PublicKey pub = keyGen.generatePublic(publicKey);
