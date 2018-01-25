@@ -54,7 +54,7 @@ class ServerActions implements Runnable {
 				out.writeInt(toSend.length);
 				out.write(toSend);
 				serverAESKey = sec.serverDoPhase();
-				System.out.println("Chave acordada:"+ serverAESKey);
+				
 			}					
 
 		} catch (Exception e) {
@@ -155,18 +155,18 @@ class ServerActions implements Runnable {
                 return;
             }
 
-            /*if (registry.userExists( uuid.getAsString() )) {
+            if (registry.userExists( uuid.getAsString() )) {
                 System.err.println ( "User already exists: " + data );
                 //sendResult( null, "\"uuid already exists\"" );
                 JsonElement id = registry.getUserInfo(uuid.getAsInt()).getAsJsonObject().get("id");
                 UserDescription user = new UserDescription( id.getAsInt() , registry.getUserInfo(uuid.getAsInt()));
                 JsonElement key=user.description.getAsJsonObject().get("sec-data");
-                System.out.println("Chave que foi Guardada Codificada:"+ key);
+                /*System.out.println("Chave que foi Guardada Codificada:"+ key);
                 serverAESKey = Server.sec.decodeStoredKey(key.getAsString());
-                System.out.println("Chave que foi Guardada Descodificada:"+ serverAESKey);
+                System.out.println("Chave que foi Guardada Descodificada:"+ serverAESKey);*/
                 sendResult( "\"result\":\"" + id + "\"", null );
                 return;
-            }*/
+            }
             
             data.remove ( "type" );
             data.addProperty("sec-data", Base64.getEncoder().encodeToString(serverAESKey.getEncoded()));

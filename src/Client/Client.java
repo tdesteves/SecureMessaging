@@ -154,7 +154,7 @@ public class Client {
 	}
 	
 	//Method that reads the message received from the Server
-	public static String readResult() throws Exception{
+	public static JsonElement readResult() throws Exception{
 		
 		JsonElement data = null;
 		
@@ -168,7 +168,7 @@ public class Client {
 				data = new JsonParser().parse(userID);
 
 			}
-			return data.toString();
+			return data;
 	
 	}
 	
@@ -200,6 +200,8 @@ public class Client {
 		
 		System.out.println("User ID:" + uuid);
 		
+		readResults results = new readResults();
+		
 		
 		//Creates new message every time the menu is opened
 		JsonObject message = new JsonObject();
@@ -227,7 +229,7 @@ public class Client {
 			byte[] listSigned= clientSec.signMessage(sendList,  pvKey);
 			System.out.println(pvKey.toString());
 			sendCommand(sendList, listSigned, pubKey);
-			System.out.println(readResult());
+			results.readListResult(readResult().getAsJsonObject());
 			break;
 		case 2:
 			//NEW
@@ -236,7 +238,8 @@ public class Client {
 			byte[] sendNew = clientSec.encryptMessage(message.toString());
 			byte[] newSigned= clientSec.signMessage(sendNew,  pvKey);
 			sendCommand(sendNew, newSigned, pubKey);
-			System.out.println(readResult());
+			results.readNewMgs(readResult().getAsJsonObject());
+			//System.out.println(readResult());
 			break;
 		case 3:
 			//ALL
@@ -245,7 +248,8 @@ public class Client {
 			byte[] sendAll = clientSec.encryptMessage(message.toString());
 			byte[] allSigned= clientSec.signMessage(sendAll,  pvKey);
 			sendCommand(sendAll, allSigned, pubKey);
-			System.out.println(readResult());
+			results.readAllMsg(readResult().getAsJsonObject());
+			//System.out.println(readResult());
 			break;
 		case 4:
 			//SEND
@@ -283,10 +287,14 @@ public class Client {
 			byte[] sendRecv = clientSec.encryptMessage(message.toString());	
 			byte[] recvSigned= clientSec.signMessage(sendRecv,  pvKey);
 			sendCommand(sendRecv, recvSigned, pubKey);
-			System.out.println("Sending receipt...");
-			sendReceipt(targetMsg);
-			JsonObject obj = new JsonParser().parse(readResult()).getAsJsonObject();
-			System.out.println("Mensagem: "+ clientSec.decodeMessage(obj));
+			
+			JsonObject obj = readResult().getAsJsonObject();
+			if(results.readMessage(obj)) {
+				System.out.println("Mensagem: "+ clientSec.decodeMessage(obj));
+				System.out.println("Sending receipt...");
+				sendReceipt(targetMsg);
+			}
+				
 			break;
 		case 6:
 			//STATUS

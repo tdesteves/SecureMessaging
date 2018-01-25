@@ -1,12 +1,16 @@
 package Server;
 
 import java.security.AlgorithmParameters;
+import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.PublicKey;
+import java.security.Security;
 import java.security.Signature;
+import java.security.SignatureException;
 import java.security.spec.EncodedKeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
@@ -19,12 +23,18 @@ import javax.crypto.interfaces.DHPublicKey;
 import javax.crypto.spec.DHParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import javax.security.auth.x500.X500Principal;
+import javax.security.cert.Certificate;
+import javax.security.cert.CertificateEncodingException;
+import javax.security.cert.CertificateException;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import sun.security.pkcs10.PKCS10;
+import org.bouncycastle.jce.PKCS10CertificationRequest;
+
 
 public class ServerSecurity {
 	
@@ -155,4 +165,22 @@ public class ServerSecurity {
 		
 		return privKey;
 	}
+	
+	@SuppressWarnings("deprecation")
+	public static PKCS10CertificationRequest getRequest(KeyPair pair) throws Exception {
+		
+		return new PKCS10CertificationRequest("SHA1withRSA", new X500Principal("CN=Request Certificate"), pair.getPublic(),null,pair.getPrivate());
+		
+	}
+	
+	public static void sendRequest() throws Exception{
+		KeyPairGenerator pairGen = KeyPairGenerator.getInstance("RSA", "BC");
+		pairGen.initialize(2048);
+		
+		KeyPair pair=pairGen.generateKeyPair();
+		
+		PKCS10CertificationRequest req = getRequest(pair);
+	
+	}
+
 }
