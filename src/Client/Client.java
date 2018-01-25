@@ -198,6 +198,7 @@ public class Client {
 	
 	public static void menu() throws Exception {
 		
+		System.out.println();
 		System.out.println("User ID:" + uuid);
 		
 		readResults results = new readResults();
@@ -307,7 +308,7 @@ public class Client {
 			byte[] sendStatus = clientSec.encryptMessage(message.toString());
 			byte[] statusSigned= clientSec.signMessage(sendStatus,  pvKey);
 			sendCommand(sendStatus, statusSigned, pubKey);
-			System.out.println(readResult());			
+			results.readReceipts(readResult().getAsJsonObject());			
 		}
 		menu();
 		

@@ -1,5 +1,7 @@
 package Client;
 
+import java.util.Base64;
+
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -62,6 +64,25 @@ public class readResults {
 	
 		return true;
 		
+	}
+	
+	public void readReceipts(JsonObject receipt) throws Exception{
+		
+	
+		JsonObject array = receipt.getAsJsonObject("result");
+		String og= array.get("msg").getAsString();
+		System.out.println("Original Message: "+ new String(Base64.getDecoder().decode(og)));
+		JsonArray rcpt = array.getAsJsonArray("receipts");
+		if(rcpt.size()==0) {
+			System.out.println("Yet not read!");
+			return;
+		}
+			
+		JsonObject tmp = rcpt.get(0).getAsJsonObject();
+		
+		System.out.println("Date: "+ tmp.get("date"));
+		System.out.println("Id: "+ tmp.get("id"));
+		System.out.println("Seen by: "+ tmp.get("receipt"));
 	}
 
 }

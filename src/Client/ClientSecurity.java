@@ -124,6 +124,7 @@ public class ClientSecurity{
 		return msgEncoded;
 	}
 	
+	
 	//Encodes byte arrays (this is for JSON message exchanged)
 	public byte[] encodeJSON (byte[] message) {
 		
