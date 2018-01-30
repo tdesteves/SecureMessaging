@@ -8,6 +8,7 @@ import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.PublicKey;
+import java.security.SecureRandom;
 import java.security.Security;
 import java.security.Signature;
 import java.security.SignatureException;
@@ -42,6 +43,9 @@ public class ServerSecurity {
 	PublicKey clientPubKey;
 	KeyAgreement serverKeyAgree;
 	byte[] encodedParams;
+	int ivSize=16;
+	IvParameterSpec ivParams;
+	byte[] iv;
 	
 
 	//Initiates Diffie-Hellman key exchange protocol
@@ -89,9 +93,18 @@ public class ServerSecurity {
 	
 	public String decryptMessage (byte[] message, SecretKeySpec serverAESKey) throws Exception{
 	
-		Cipher resultCipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-        resultCipher.init(Cipher.DECRYPT_MODE, serverAESKey);
-        byte[] recovered = resultCipher.doFinal(message);
+		//Extract Parameters
+		iv= new byte[ivSize];
+		System.arraycopy(message, 0, iv, 0, iv.length);
+		ivParams = new IvParameterSpec(iv);
+		
+		int encryptedSize = message.length-ivSize;
+		byte[] encrypted = new byte[encryptedSize];
+		System.arraycopy(message, ivSize , encrypted, 0, encryptedSize);
+		
+		Cipher resultCipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        resultCipher.init(Cipher.DECRYPT_MODE, serverAESKey, ivParams);
+        byte[] recovered = resultCipher.doFinal(encrypted);
         String result = new String(recovered);
 		
 		return result;
@@ -100,12 +113,22 @@ public class ServerSecurity {
 	// This function receives a plain message and returns a ciphered then encoded
 	// one
 	public byte[] encryptMessage(String message, SecretKeySpec serverAESKey) throws Exception {
+		
+		iv = new byte[ivSize];
+		SecureRandom random = new SecureRandom();
+		random.nextBytes(iv);
+		ivParams = new IvParameterSpec(iv);
 
-		Cipher clientCipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-		clientCipher.init(Cipher.ENCRYPT_MODE, serverAESKey);
+		Cipher clientCipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+		clientCipher.init(Cipher.ENCRYPT_MODE, serverAESKey, ivParams);
 		byte[] cipher = clientCipher.doFinal(message.getBytes());
+		
+		//Combine message with Parameters
+				byte[] msg = new byte[cipher.length + ivSize ];
+				System.arraycopy(iv, 0, msg, 0, ivSize);
+				System.arraycopy(cipher, 0, msg, ivSize, cipher.length);
 
-		return encodeJSON(cipher);
+		return encodeJSON(msg);
 	}
 
 	// Encodes byte arrays (this is for JSON message exchanged)

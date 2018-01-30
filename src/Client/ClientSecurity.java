@@ -39,12 +39,14 @@ public class ClientSecurity{
 	KeyAgreement clientAgree;
 	PublicKey serverPubKey;
 	SecretKeySpec clientAESKey;
-	IvParameterSpec iv;
 	//private static final String alphabet= "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 	Cipher clientCipher;
 	ccReader reader;
 	 byte[] digest;
 	 PublicKey pub;
+	 byte[] iv;
+	 int ivSize=16;
+	IvParameterSpec ivParams;
 	
 	//Initiates DH Agreement
 	public byte[] initiateDH() throws Exception {
@@ -75,6 +77,7 @@ public class ClientSecurity{
 	public void doPhase() throws Exception{
 		
 		clientAgree.doPhase(serverPubKey, true);
+	
         
         byte[] clientSharedSecret = clientAgree.generateSecret();
         
@@ -86,19 +89,39 @@ public class ClientSecurity{
 	//This function receives a plain message and returns a ciphered then encoded one
 	public byte[] encryptMessage (String message) throws Exception{
 		
-		clientCipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-		clientCipher.init(Cipher.ENCRYPT_MODE, clientAESKey);
+		iv = new byte[ivSize];
+		SecureRandom random = new SecureRandom();
+		random.nextBytes(iv);
+		ivParams = new IvParameterSpec(iv);
+		
+		clientCipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+		clientCipher.init(Cipher.ENCRYPT_MODE, clientAESKey, ivParams);
 		byte[] cipher = clientCipher.doFinal(message.getBytes());
 		
-		return encodeJSON(cipher);
+		//Combine message with Parameters
+		byte[] msg = new byte[cipher.length + ivSize ];
+		System.arraycopy(iv, 0, msg, 0, ivSize);
+		System.arraycopy(cipher, 0, msg, ivSize, cipher.length);
+		
+		return encodeJSON(msg);
 	}
 	
 	//Receives bytes decoded and then decrypts the message inside
 	public String decryptMessage(byte[] message) throws Exception {
+		
+		//Extract Parameters
+				iv= new byte[ivSize];
+				System.arraycopy(message, 0, iv, 0, iv.length);
+				ivParams = new IvParameterSpec(iv);
+				
+				int encryptedSize = message.length-ivSize;
+				byte[] encrypted = new byte[encryptedSize];
+				System.arraycopy(message, ivSize , encrypted, 0, encryptedSize);
+				
 
-		Cipher resultCipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-		resultCipher.init(Cipher.DECRYPT_MODE, clientAESKey);
-		byte[] recovered = resultCipher.doFinal(message);
+		Cipher resultCipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+		resultCipher.init(Cipher.DECRYPT_MODE, clientAESKey, ivParams);
+		byte[] recovered = resultCipher.doFinal(encrypted);
 		String result = new String(recovered);
 
 		return result;

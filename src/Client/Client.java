@@ -115,6 +115,7 @@ public class Client {
 			dIn.readFully(message, 0, message.length); // read the message		
 			byte[] getID = clientSec.decodeMessage(message);
 			String userID = clientSec.decryptMessage(getID);
+			System.out.println(userID);
 			JsonElement data = new JsonParser().parse(userID);
 			uuid = data.getAsJsonObject().get("result");
 			
