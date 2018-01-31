@@ -34,6 +34,7 @@ class ServerActions implements Runnable {
     ServerSecurity sec;
    
     byte[] message;
+    String keyToStore;
 
     //Construtor para os novos users
     ServerActions ( Socket c, ServerControl r, ServerSecurity sec) throws Exception {
@@ -90,6 +91,8 @@ class ServerActions implements Runnable {
         			//byte[] cmd = Server.sec.decodeMessage(message);
         			System.out.println("Verificado? : "+ Server.sec.verifyMessage(message));
         			if(Server.sec.verifyMessage(message)==true) {
+        				//keyToStore = Server.sec.getKey(message);
+        				System.out.println("Cheguei aqui");
         				String ogMessage = Server.sec.decryptMessage(Server.sec.readMessage(message), serverAESKey);
             			// Parsing the message received
             			JsonElement data = new JsonParser().parse(ogMessage);
@@ -169,7 +172,8 @@ class ServerActions implements Runnable {
             }
             
             data.remove ( "type" );
-            data.addProperty("sec-data", Base64.getEncoder().encodeToString(serverAESKey.getEncoded()));
+            data.addProperty("sec-data", data.get("pubKey").getAsString());
+            data.remove("pubKey");
             me = registry.addUser( data );
 
             sendResult( "\"result\":\"" + me.id + "\"", null );
@@ -257,7 +261,6 @@ class ServerActions implements Runnable {
                 return;
             }
 
-            // Save message and copy
 
             String response = registry.sendMessage( srcId, dstId,
                                                     msg.getAsString(),
@@ -298,6 +301,8 @@ class ServerActions implements Runnable {
 
             String response = registry.recvMessage( fromId, msg.getAsString() );
 
+            System.out.println("Message: "+ response);
+            
             sendResult( "\"result\":" + response, null );
             return;
         }

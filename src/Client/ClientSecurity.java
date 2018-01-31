@@ -7,6 +7,7 @@ import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.Provider;
@@ -27,6 +28,8 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import javax.swing.text.IconView;
+
+import org.bouncycastle.crypto.tls.HandshakeType;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -165,10 +168,12 @@ public class ClientSecurity{
 		return toSend;
 	}
 	
-	public KeyPair getKeys() throws Exception {
+	public KeyPair getKeys(String seed) throws Exception {
+		
+		SecureRandom rand = new SecureRandom(seed.getBytes());
 		
 		KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
-		keyGen.initialize(2048);
+		keyGen.initialize(2048,rand);
 		KeyPair pair = keyGen.generateKeyPair();
 		
 		return pair;
@@ -186,4 +191,37 @@ public class ClientSecurity{
 		return signedMessage;
 	}
 	
+	public byte[] decryptStoredMsg(byte[] msg, PrivateKey pvKey)throws Exception {
+		
+		
+		Cipher cipher = Cipher.getInstance("RSA");
+		cipher.init(Cipher.DECRYPT_MODE, pvKey);
+		
+		byte[] toRead = cipher.doFinal(msg);
+		
+		return toRead;
+	}
+	
+	//Creation of keys for message decryption end to end
+	public PublicKey getDstKey(JsonElement keyAsJsonElem)throws Exception {
+		String key = keyAsJsonElem.getAsString();
+		
+		byte[] temp = Base64.getDecoder().decode(key);
+		KeyFactory keyGen = KeyFactory.getInstance("RSA");
+		X509EncodedKeySpec publicKey= new X509EncodedKeySpec(temp);
+		PublicKey pub = keyGen.generatePublic(publicKey);
+		
+		return pub;
+	}
+	
+	//This function encrypts the message itself using the public key from the dst Client, stored in the server
+	public byte[] encryptToDst(String msg, PublicKey key) throws Exception {
+		
+		Cipher msgCipher = Cipher.getInstance("RSA");
+		msgCipher.init(Cipher.ENCRYPT_MODE, key);
+		
+		byte[] message = msgCipher.doFinal(msg.getBytes());
+		
+		return message;
+	}
 }

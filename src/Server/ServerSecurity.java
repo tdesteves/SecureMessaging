@@ -5,6 +5,7 @@ import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.PublicKey;
@@ -20,6 +21,7 @@ import java.util.Base64;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyAgreement;
+import javax.crypto.NoSuchPaddingException;
 import javax.crypto.interfaces.DHPublicKey;
 import javax.crypto.spec.DHParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
@@ -46,7 +48,7 @@ public class ServerSecurity {
 	int ivSize=16;
 	IvParameterSpec ivParams;
 	byte[] iv;
-	
+	PublicKey pubKeyCC;
 
 	//Initiates Diffie-Hellman key exchange protocol
 	public byte[] initiateDH() throws Exception{
@@ -154,6 +156,8 @@ public class ServerSecurity {
 		EncodedKeySpec publicKey= new X509EncodedKeySpec(Base64.getDecoder().decode(key.getAsString()));
 		PublicKey pub = keyGen.generatePublic(publicKey);
 		
+		pubKeyCC = pub;
+		
 		signAlg.initVerify(pub);
 		signAlg.update(ogMessage.getAsString().getBytes());
 		
@@ -177,33 +181,49 @@ public class ServerSecurity {
 		return decodeMessage(ogMessage.getAsString().getBytes());
 	}
 	
-	public SecretKeySpec decodeStoredKey (String keyEncoded) throws Exception {
+	public PublicKey decodeStoredKey (String keyEncoded) throws Exception {
 		
-		byte[] key = decodeMessage(keyEncoded.getBytes());
 		
-		//PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(key);
-		//KeyFactory kf = KeyFactory.getInstance("RSA");
-        SecretKeySpec privKey = new SecretKeySpec(key, "AES");
-        System.out.println(privKey);
+		byte[] temp = Base64.getDecoder().decode(keyEncoded);
+		KeyFactory keyGen = KeyFactory.getInstance("RSA");
+		X509EncodedKeySpec publicKey= new X509EncodedKeySpec(temp);
+		PublicKey pub = keyGen.generatePublic(publicKey);
 		
-		return privKey;
+		return pub;
+	}
+
+	
+	public String generateUUIDHash(String BI) throws NoSuchAlgorithmException {
+		MessageDigest digest = MessageDigest.getInstance("MD5");
+		digest.digest(BI.getBytes());
+		String uuid = new String(digest.digest());
+		
+		return uuid;
 	}
 	
-	@SuppressWarnings("deprecation")
-	public static PKCS10CertificationRequest getRequest(KeyPair pair) throws Exception {
+	public byte[] encryptToStoreMsg(String msg, PublicKey pbKey)throws Exception{
 		
-		return new PKCS10CertificationRequest("SHA1withRSA", new X500Principal("CN=Request Certificate"), pair.getPublic(),null,pair.getPrivate());
+		System.out.println("Mensagem: "+ msg);
 		
+		Cipher msgCipher = Cipher.getInstance("RSA");
+		msgCipher.init(Cipher.ENCRYPT_MODE, pbKey);
+		
+		
+		byte[] toStore = msgCipher.doFinal(Base64.getEncoder().encode(msg.getBytes()));
+		
+		return toStore;
 	}
 	
-	public static void sendRequest() throws Exception{
-		KeyPairGenerator pairGen = KeyPairGenerator.getInstance("RSA", "BC");
-		pairGen.initialize(2048);
+	public String getKey(byte[] obj) {
+		String tmp = new String(obj);
+		JsonElement parser = new JsonParser().parse(tmp);
+		JsonElement key = parser.getAsJsonObject().get("pubKey");
 		
-		KeyPair pair=pairGen.generateKeyPair();
+		System.out.println("Chave no JSON: " + key.getAsString());
 		
-		PKCS10CertificationRequest req = getRequest(pair);
-	
+		
+		return key.getAsString();
 	}
+	
 
 }
