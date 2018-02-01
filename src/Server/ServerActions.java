@@ -12,6 +12,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
 import java.util.Arrays;
 import java.util.Base64;
 
@@ -88,17 +89,17 @@ class ServerActions implements Runnable {
         		if(length > 0) {
         			message = new byte[length];
         			in.readFully(message, 0, message.length);
-        			//byte[] cmd = Server.sec.decodeMessage(message);
+        			
+        			//Verify the signature from received message
         			System.out.println("Verificado? : "+ Server.sec.verifyMessage(message));
-        			if(Server.sec.verifyMessage(message)==true) {
-        				//keyToStore = Server.sec.getKey(message);
+        			if(Server.sec.verifyMessage(message)==true) {	
         				String ogMessage = Server.sec.decryptMessage(Server.sec.readMessage(message), serverAESKey);
             			// Parsing the message received
             			JsonElement data = new JsonParser().parse(ogMessage);
             			if (data.isJsonObject()) {
             				return data.getAsJsonObject();
             			}
-            			//System.out.println("ogMessage: " + cmd);
+            			
         			}	
         		}	
 			System.err.print ( "Error while reading command from socket (not a JSON object), connection will be shutdown\n" );
@@ -130,9 +131,16 @@ class ServerActions implements Runnable {
         msg += "}\n";
 
         try {         
+        	JsonObject rsp = new JsonObject();
+        	KeyPair pair = Server.sec.generateSignKeys();
             byte[] encryptedMsg = Server.sec.encryptMessage(msg, serverAESKey);
-            out.writeInt(encryptedMsg.length);
-            out.write(encryptedMsg);
+            byte[] signedMsg = Server.sec.signMessage(encryptedMsg, pair.getPrivate());
+            rsp.addProperty("message", new String(encryptedMsg));
+            rsp.addProperty("signed", Base64.getEncoder().encodeToString(signedMsg));
+            rsp.addProperty("key", Base64.getEncoder().encodeToString(pair.getPublic().getEncoded()));
+            byte[] send =rsp.toString().getBytes("UTF-8");
+            out.writeInt(send.length);
+            out.write(send);
         } catch (Exception e ) {}
     }
 
@@ -295,6 +303,8 @@ class ServerActions implements Runnable {
                 sendResult( null, "\"wrong parameters\"" );
                 return;
             }
+            
+            System.out.println(registry.userAllMessages(fromId));
 
             // Read message
 

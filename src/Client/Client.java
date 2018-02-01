@@ -15,6 +15,7 @@ import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.KeyPair;
+import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.Provider.Service;
@@ -61,6 +62,7 @@ public class Client {
 		String f = currentDirectory.getAbsolutePath() + "/src/Client/CartaoCidadao.cfg";
 		Provider p = new sun.security.pkcs11.SunPKCS11( f );
 		Security.addProvider(p);
+		//KeyStore.CallbackHandlerProtection chp = new KeyStore.CallbackHandlerProtection();
 		loginMenu();
 		createConn();
 		initExchange();
@@ -121,11 +123,21 @@ public class Client {
 		
 		if (length > 0) {
 			byte[] message = new byte[length];
-			dIn.readFully(message, 0, message.length); // read the message		
-			byte[] getID = clientSec.decodeMessage(message);
-			String userID = clientSec.decryptMessage(getID);
-			JsonElement data = new JsonParser().parse(userID);
-			uuid = data.getAsJsonObject().get("result");
+			dIn.readFully(message, 0, message.length); // read the message
+
+			if(clientSec.verifyMessage(message)) {
+				String cmdAsString = new String(message);
+				JsonElement tmp =  new JsonParser().parse(cmdAsString);
+				JsonElement ogMessage = tmp.getAsJsonObject().get("message");
+				byte[] getID = clientSec.decodeMessage(ogMessage.getAsString().getBytes());
+				String userID = clientSec.decryptMessage(getID);
+				JsonElement data = new JsonParser().parse(userID);
+				uuid = data.getAsJsonObject().get("result");
+			}else {
+				System.out.println("Message not validated! Returning to Menu...");
+				menu();
+			}
+			
 			
 		}
 		
@@ -166,10 +178,19 @@ public class Client {
 			if (length > 0) {
 				byte[] message = new byte[length];
 				dIn.readFully(message, 0, message.length); // read the message
-				byte[] getID = clientSec.decodeMessage(message);
-				String userID = clientSec.decryptMessage(getID);
-				System.out.println(userID);
-				data = new JsonParser().parse(userID);
+				if(clientSec.verifyMessage(message)) {
+					String cmdAsString = new String(message);
+					JsonElement tmp =  new JsonParser().parse(cmdAsString);
+					JsonElement ogMessage = tmp.getAsJsonObject().get("message");
+					byte[] getID = clientSec.decodeMessage(ogMessage.getAsString().getBytes());
+					String userID = clientSec.decryptMessage(getID);
+					System.out.println(userID);
+					data = new JsonParser().parse(userID);
+				}else {
+					System.out.println("Message not validated! Returning to Menu...");
+					menu();
+				}
+				
 
 			}
 			return data;
@@ -177,18 +198,21 @@ public class Client {
 	}
 	
 	//Method to send receipt - id is given by the CC
-	public static void sendReceipt(String message, PublicKey keyToUse) throws Exception {
+	public static void sendReceipt(String messageId, String message, PublicKey keyToUse) throws Exception {
 		JsonObject receipt = new JsonObject();
 		
 		receipt.addProperty("type", "receipt");
 		receipt.addProperty("id", uuid.getAsString());
-		receipt.addProperty("msg", message);
-		receipt.addProperty("receipt", ccReader.getBI());
+		receipt.addProperty("msg", messageId);
+		receipt.addProperty("receipt", Base64.getEncoder().encodeToString(clientSec.signMessage(message.getBytes(), ccReader.getPrivateKey())));
+		receipt.addProperty("key", Base64.getEncoder().encodeToString(ccReader.getPublicKey().getEncoded()));
 		
-		byte[] sendReceipt = clientSec.encryptToDst(receipt.toString(),keyToUse);
+		byte[] sendReceipt = clientSec.encryptToDst(receipt.getAsString().getBytes("UTF-8"),keyToUse);
+		byte[] toServerReceipt = clientSec.encryptMessage(new String(sendReceipt));
 		
-		byte[] receiptSigned= clientSec.signMessage(sendReceipt, pvKey);
+		byte[] receiptSigned= clientSec.signMessage(toServerReceipt, pvKey);
 		sendCommand(sendReceipt, receiptSigned, pubKey);
+
 		
 		
 	}
@@ -278,8 +302,9 @@ public class Client {
 			System.out.println("Write your message: \n");
 			String msg = scanner.nextLine();
 			//Message itself is encoded to Base64
-			message.addProperty("msg", Base64.getEncoder().encodeToString(clientSec.encryptToDst(msg, keyToUse)));
-			message.addProperty("copy", Base64.getEncoder().encodeToString(clientSec.encryptToDst(msg, keyToUse)));
+			String m = Base64.getEncoder().encodeToString(clientSec.encryptToDst(msg.getBytes(), keyToUse));
+			message.addProperty("msg", m);
+			message.addProperty("copy", m);
 			//Encrypt and then encode to BASE 64 message to Send to Server (AES)
 			byte[] toSend = clientSec.encryptMessage(message.toString());
 			byte[] toSendSigned= clientSec.signMessage(toSend,  ccReader.getPrivateKey());
@@ -315,10 +340,11 @@ public class Client {
 				
 				System.out.println(obj);
 				byte[] messageEncoded = Base64.getDecoder().decode(obj.get("result").getAsJsonArray().get(1).getAsString().getBytes());
-				System.out.println("Mensagem: "+ new String(clientSec.decryptStoredMsg(messageEncoded, pvKey)));
+				String mensagem=new String(clientSec.decryptStoredMsg(messageEncoded, pvKey));
+				System.out.println("Mensagem: "+ mensagem);
 				
 				System.out.println("Sending receipt...");
-				sendReceipt(targetMsg, keyToUseRec);
+				sendReceipt(targetMsg,mensagem, keyToUseRec);
 			}
 				
 			break;

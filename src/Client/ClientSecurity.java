@@ -14,6 +14,7 @@ import java.security.Provider;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Signature;
+import java.security.spec.EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
@@ -36,6 +37,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 public class ClientSecurity{ 
 
@@ -216,13 +218,37 @@ public class ClientSecurity{
 	}
 	
 	//This function encrypts the message itself using the public key from the dst Client, stored in the server
-	public byte[] encryptToDst(String msg, PublicKey key) throws Exception {
+	public byte[] encryptToDst(byte[] msg, PublicKey key) throws Exception {
 		
 		Cipher msgCipher = Cipher.getInstance("RSA");
 		msgCipher.init(Cipher.ENCRYPT_MODE, key);
 		
-		byte[] message = msgCipher.doFinal(msg.getBytes());
+		byte[] message = msgCipher.doFinal(msg);
 		
 		return message;
 	}
+	
+	//Function used to verify if the client message belongs to the original owner
+		public boolean verifyMessage(byte[] message) throws Exception {
+			
+			String cmdAsString = new String(message);
+			JsonElement data =  new JsonParser().parse(cmdAsString);
+			JsonElement ogMessage = data.getAsJsonObject().get("message");
+			JsonElement signedMsg = data.getAsJsonObject().get("signed");
+			JsonElement key = data.getAsJsonObject().get("key");
+				
+			
+			Signature signAlg = Signature.getInstance("SHA1withRSA");
+			KeyFactory keyGen = KeyFactory.getInstance("RSA");
+			EncodedKeySpec publicKey= new X509EncodedKeySpec(Base64.getDecoder().decode(key.getAsString()));
+			PublicKey pub = keyGen.generatePublic(publicKey);
+			
+			System.out.println("Pub Key:"+ Base64.getEncoder().encodeToString(pub.getEncoded()));
+			
+			signAlg.initVerify(pub);
+			signAlg.update(ogMessage.getAsString().getBytes());
+			
+			return signAlg.verify(Base64.getDecoder().decode(signedMsg.getAsString()));
+			
+		}
 }

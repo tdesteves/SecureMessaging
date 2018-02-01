@@ -8,6 +8,7 @@ import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
+import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Security;
@@ -156,6 +157,8 @@ public class ServerSecurity {
 		EncodedKeySpec publicKey= new X509EncodedKeySpec(Base64.getDecoder().decode(key.getAsString()));
 		PublicKey pub = keyGen.generatePublic(publicKey);
 		
+		System.out.println("Pub Key:"+ Base64.getEncoder().encodeToString(pub.getEncoded()));
+		
 		pubKeyCC = pub;
 		
 		signAlg.initVerify(pub);
@@ -224,6 +227,27 @@ public class ServerSecurity {
 		
 		return key.getAsString();
 	}
+	
+	public KeyPair generateSignKeys() throws Exception {
+		
+		KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");	
+		keyGen.initialize(2048);
+		KeyPair pair = keyGen.generateKeyPair();
+		
+		return pair;
+	}
+	
+	//Function to sign Message
+		public byte[] signMessage(byte[] message, PrivateKey key) throws Exception {
+			
+			Signature signAlg = Signature.getInstance("SHA1withRSA");
+			signAlg.initSign(key);
+			signAlg.update(message);
+			byte[] signedMessage = signAlg.sign();
+			
+			
+			return signedMessage;
+		}
 	
 
 }
