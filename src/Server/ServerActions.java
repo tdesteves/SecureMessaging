@@ -92,7 +92,6 @@ class ServerActions implements Runnable {
         			System.out.println("Verificado? : "+ Server.sec.verifyMessage(message));
         			if(Server.sec.verifyMessage(message)==true) {
         				//keyToStore = Server.sec.getKey(message);
-        				System.out.println("Cheguei aqui");
         				String ogMessage = Server.sec.decryptMessage(Server.sec.readMessage(message), serverAESKey);
             			// Parsing the message received
             			JsonElement data = new JsonParser().parse(ogMessage);

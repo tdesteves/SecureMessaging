@@ -170,9 +170,10 @@ public class ClientSecurity{
 	
 	public KeyPair getKeys(String seed) throws Exception {
 		
-		SecureRandom rand = new SecureRandom(seed.getBytes());
+		SecureRandom rand = SecureRandom.getInstance("SHA1PRNG", "SUN");
 		
 		KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+		rand.setSeed(seed.hashCode());
 		keyGen.initialize(2048,rand);
 		KeyPair pair = keyGen.generateKeyPair();
 		
