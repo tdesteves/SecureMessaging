@@ -33,6 +33,7 @@ class ServerActions implements Runnable {
     ServerControl registry;
     SecretKeySpec serverAESKey;
     ServerSecurity sec;
+    int counter=0;
    
     byte[] message;
     String keyToStore;
@@ -91,7 +92,7 @@ class ServerActions implements Runnable {
         			in.readFully(message, 0, message.length);
         			
         			//Verify the signature from received message
-        			System.out.println("Verificado? : "+ Server.sec.verifyMessage(message));
+        			//System.out.println("Verificado? : "+ Server.sec.verifyMessage(message));
         			if(Server.sec.verifyMessage(message)==true) {	
         				String ogMessage = Server.sec.decryptMessage(Server.sec.readMessage(message), serverAESKey);
             			// Parsing the message received
@@ -138,6 +139,7 @@ class ServerActions implements Runnable {
             rsp.addProperty("message", new String(encryptedMsg));
             rsp.addProperty("signed", Base64.getEncoder().encodeToString(signedMsg));
             rsp.addProperty("key", Base64.getEncoder().encodeToString(pair.getPublic().getEncoded()));
+            rsp.addProperty("tag", Server.sec.counter);
             byte[] send =rsp.toString().getBytes("UTF-8");
             out.writeInt(send.length);
             out.write(send);
@@ -300,17 +302,13 @@ class ServerActions implements Runnable {
             if (registry.messageExists( fromId, msg.getAsString() ) == false &&
                 registry.messageExists( fromId, "_" + msg.getAsString() ) == false) {
                 System.err.println ( "Unknown message for \"recv\" request: " + data );
-                sendResult( null, "\"wrong parameters\"" );
+                sendResult(null , "\"wrong parameters\"");
                 return;
             }
-            
-            System.out.println(registry.userAllMessages(fromId));
 
             // Read message
 
             String response = registry.recvMessage( fromId, msg.getAsString() );
-
-            System.out.println("Message: "+ response);
             
             sendResult( "\"result\":" + response, null );
             return;
@@ -322,6 +320,7 @@ class ServerActions implements Runnable {
             JsonElement id = data.get( "id" );
             JsonElement msg = data.get( "msg" );
             JsonElement receipt = data.get( "receipt" );
+            JsonElement key = data.get("key");
 
             if (id == null || msg == null || receipt == null) {
                 System.err.print ( "Badly formated \"receipt\" request: " + data );
@@ -366,6 +365,8 @@ class ServerActions implements Runnable {
             // Get receipts
 
             String response = registry.getReceipts( fromId, msg.getAsString() );
+            
+            System.out.println("Receipt: "+ response);
 
             sendResult( "\"result\":" + response, null );
             return;

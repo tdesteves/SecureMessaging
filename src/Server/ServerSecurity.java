@@ -50,6 +50,7 @@ public class ServerSecurity {
 	IvParameterSpec ivParams;
 	byte[] iv;
 	PublicKey pubKeyCC;
+	public int counter;
 
 	//Initiates Diffie-Hellman key exchange protocol
 	public byte[] initiateDH() throws Exception{
@@ -150,14 +151,15 @@ public class ServerSecurity {
 		JsonElement ogMessage = data.getAsJsonObject().get("message");
 		JsonElement signedMsg = data.getAsJsonObject().get("signed");
 		JsonElement key = data.getAsJsonObject().get("key");
-			
+		JsonElement tag = data.getAsJsonObject().get("tag");
 		
+		counter = tag.getAsInt() +1 ;	
+		
+		System.out.println("Counter no server:"+ tag.getAsInt());
 		Signature signAlg = Signature.getInstance("SHA1withRSA");
 		KeyFactory keyGen = KeyFactory.getInstance("RSA");
 		EncodedKeySpec publicKey= new X509EncodedKeySpec(Base64.getDecoder().decode(key.getAsString()));
 		PublicKey pub = keyGen.generatePublic(publicKey);
-		
-		System.out.println("Pub Key:"+ Base64.getEncoder().encodeToString(pub.getEncoded()));
 		
 		pubKeyCC = pub;
 		

@@ -243,7 +243,6 @@ public class ClientSecurity{
 			EncodedKeySpec publicKey= new X509EncodedKeySpec(Base64.getDecoder().decode(key.getAsString()));
 			PublicKey pub = keyGen.generatePublic(publicKey);
 			
-			System.out.println("Pub Key:"+ Base64.getEncoder().encodeToString(pub.getEncoded()));
 			
 			signAlg.initVerify(pub);
 			signAlg.update(ogMessage.getAsString().getBytes());
@@ -251,4 +250,11 @@ public class ClientSecurity{
 			return signAlg.verify(Base64.getDecoder().decode(signedMsg.getAsString()));
 			
 		}
+		
+	public String digestValue(String value) throws Exception {
+		
+		MessageDigest md = MessageDigest.getInstance("MD5");
+		
+		return new String(md.digest(value.getBytes()));
+	}
 }

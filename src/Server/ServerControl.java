@@ -362,7 +362,7 @@ class ServerControl {
     }
 
     void
-    storeReceipt ( int id, String msg, String receipt ) {
+    storeReceipt ( int id, String msg, String receipt) {
         Pattern p = Pattern.compile( "_?+([0-9]+)_([0-9])" );
         Matcher m = p.matcher( msg );
 
@@ -374,7 +374,7 @@ class ServerControl {
         String path = userReceiptBox( Integer.parseInt( m.group( 1 ) ) ) + "/_" + id + "_" + m.group( 2 ) + "_" + System.currentTimeMillis();
 
         try {
-            saveOnFile ( path, receipt );
+            saveOnFile ( path, receipt);
         } catch (Exception e) {
             System.err.println( "Cannot create receipt file " + path + ": " + e );
         }

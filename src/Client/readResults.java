@@ -9,7 +9,7 @@ import com.google.gson.JsonParser;
 
 public class readResults {
 	
-	ClientSecurity clientSec;
+
 	
 	public void readListResult(JsonObject data) {
 		
@@ -58,20 +58,29 @@ public class readResults {
 	public boolean readMessage(JsonObject obj) throws Exception{
 		
 		if(obj.get("error")!=null) {
-			System.out.println("No permissions or badly formatted JSON!");
-			return false;
+			if(obj.get("error").getAsString().equals("wrong parameters")) {
+				System.out.println("There's no message on your mbox with that name!");
+				return false;
+			}
 		}
-	
-		return true;
+			return true;
 		
 	}
 	
-	public void readReceipts(JsonObject receipt) throws Exception{
+	public void readReceipts(JsonObject receipt, ClientSecurity clientSec) throws Exception{
 		
 	
 		JsonObject array = receipt.getAsJsonObject("result");
-		String og= array.get("msg").getAsString();
-		System.out.println("Original Message: "+ new String(Base64.getDecoder().decode(og)));
+		
+		JsonElement og= array.get("msg");
+		JsonArray rcps = array.get("receipts").getAsJsonArray();
+		JsonObject rcp = rcps.get(0).getAsJsonObject();
+		
+		byte[] msg = Base64.getDecoder().decode(og.getAsString().getBytes());
+		
+		System.out.println("Resultado: "+rcp.toString());
+		System.out.println(clientSec.verifyMessage(rcp.get("receipt").getAsString().getBytes()));
+		
 		JsonArray rcpt = array.getAsJsonArray("receipts");
 		if(rcpt.size()==0) {
 			System.out.println("Yet not read!");
