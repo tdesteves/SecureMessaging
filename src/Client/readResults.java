@@ -1,5 +1,6 @@
 package Client;
 
+import java.security.PrivateKey;
 import java.util.Base64;
 
 import com.google.gson.JsonArray;
@@ -67,31 +68,48 @@ public class readResults {
 		
 	}
 	
-	public void readReceipts(JsonObject receipt, ClientSecurity clientSec) throws Exception{
+	public boolean readReceipts(JsonObject receipt, ClientSecurity clientSec) throws Exception{
 		
 	
+		
 		JsonObject array = receipt.getAsJsonObject("result");
-		
-		JsonElement og= array.get("msg");
-		JsonArray rcps = array.get("receipts").getAsJsonArray();
-		JsonObject rcp = rcps.get(0).getAsJsonObject();
-		
-		byte[] msg = Base64.getDecoder().decode(og.getAsString().getBytes());
-		
-		System.out.println("Resultado: "+rcp.toString());
-		System.out.println(clientSec.verifyMessage(rcp.get("receipt").getAsString().getBytes()));
 		
 		JsonArray rcpt = array.getAsJsonArray("receipts");
 		if(rcpt.size()==0) {
 			System.out.println("Yet not read!");
-			return;
-		}
+			return false;
+		}else {
+			JsonElement og= array.get("msg");
+			JsonArray rcps = array.get("receipts").getAsJsonArray();
+			JsonObject rcp = rcps.get(0).getAsJsonObject();
 			
-		JsonObject tmp = rcpt.get(0).getAsJsonObject();
-		
+			byte[] msg = Base64.getDecoder().decode(og.getAsString().getBytes());
+			
+			JsonObject tmp = rcpt.get(0).getAsJsonObject();
+			
+			System.out.println("Date: "+ tmp.get("date"));
+			System.out.println("Id: "+ tmp.get("id"));
+			System.out.println("Signed: "+ clientSec.verifyMessage(rcp.get("receipt").getAsJsonObject().toString().getBytes()));
+			return true;
+		}
+		/*JsonArray rcps = array.get("receipts").getAsJsonArray();
+		JsonObject tmp = rcps.get(0).getAsJsonObject();
+		//System.out.println("Message: " + array.get("message").getAsString());
 		System.out.println("Date: "+ tmp.get("date"));
 		System.out.println("Id: "+ tmp.get("id"));
 		System.out.println("Seen by: "+ tmp.get("receipt"));
+		return true;*/
+			
+		
+	}
+	
+	public JsonObject getReceipt(JsonObject obj) {
+	
+		JsonObject result = obj.get("result").getAsJsonObject();
+		JsonObject message = result.get("message").getAsJsonObject();
+		JsonArray receipts = result.get("receipts").getAsJsonArray();
+		
+		return receipts.get(0).getAsJsonObject();
 	}
 
 }

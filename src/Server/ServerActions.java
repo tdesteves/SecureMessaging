@@ -140,6 +140,7 @@ class ServerActions implements Runnable {
             rsp.addProperty("signed", Base64.getEncoder().encodeToString(signedMsg));
             rsp.addProperty("key", Base64.getEncoder().encodeToString(pair.getPublic().getEncoded()));
             rsp.addProperty("tag", Server.sec.counter);
+            System.out.println("Result: " + rsp.toString());
             byte[] send =rsp.toString().getBytes("UTF-8");
             out.writeInt(send.length);
             out.write(send);

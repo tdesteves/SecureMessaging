@@ -63,7 +63,6 @@ public class Client {
 		String f = currentDirectory.getAbsolutePath() + "/src/Client/CartaoCidadao.cfg";
 		Provider p = new sun.security.pkcs11.SunPKCS11( f );
 		Security.addProvider(p);
-		//KeyStore.CallbackHandlerProtection chp = new KeyStore.CallbackHandlerProtection();
 		loginMenu();
 		createConn();
 		initExchange();
@@ -103,7 +102,7 @@ public class Client {
 	public static void initExchange() throws Exception{
 		
 		//Get private key for message signature
-		KeyPair pair = clientSec.getKeys(ccReader.getBI());
+		KeyPair pair = clientSec.getKeys("AB");
 		pvKey = pair.getPrivate();
 		pubKey = pair.getPublic();
 		
@@ -111,7 +110,7 @@ public class Client {
 		
 		JsonObject init= new JsonObject();
 		init.addProperty("type", "create");
-		init.addProperty("uuid", ccReader.getBI()); 
+		init.addProperty("uuid", "10"); 
 		init.addProperty("pubKey", Base64.getEncoder().encodeToString(pubKey.getEncoded()));
 		
 		byte[] initSend = clientSec.encryptMessage(init.toString());
@@ -216,13 +215,14 @@ public class Client {
 		JsonObject receiptCredentials = new JsonObject();
 		
 		receiptCredentials.addProperty("message", message);
-		receiptCredentials.addProperty("signed", Base64.getEncoder().encodeToString(clientSec.signMessage(message.getBytes(), ccReader.getPrivateKey())));
-		receiptCredentials.addProperty("key", Base64.getEncoder().encodeToString(ccReader.getPublicKey().getEncoded()));
+		receiptCredentials.addProperty("signed",Base64.getEncoder().encodeToString(clientSec.signMessage(message.getBytes(), ccReader.getPrivateKey())));
+		receiptCredentials.addProperty("key",Base64.getEncoder().encodeToString(ccReader.getPublicKey().getEncoded()));
 		
 		receipt.addProperty("type", "receipt");
 		receipt.addProperty("id", uuid.getAsString());
-		receipt.addProperty("msg", messageId);
+		receipt.addProperty("msg", messageId.toString());
 		receipt.addProperty("receipt", receiptCredentials.toString());
+		
 		
 		//byte[] sendReceipt = clientSec.encryptToDst(receipt.toString().getBytes(),keyToUse);
 		byte[] toServerReceipt = clientSec.encryptMessage(receipt.toString());
@@ -376,7 +376,11 @@ public class Client {
 			byte[] sendStatus = clientSec.encryptMessage(message.toString());
 			byte[] statusSigned= clientSec.signMessage(sendStatus,  pvKey);
 			sendCommand(sendStatus, statusSigned, pubKey);
-			results.readReceipts(readResult().getAsJsonObject(), clientSec);			
+			System.out.println();
+			if(results.readReceipts(readResult().getAsJsonObject(), clientSec)) {
+				break;
+			}else
+				menu();			
 		case 7:
 			closeConn();
 		}

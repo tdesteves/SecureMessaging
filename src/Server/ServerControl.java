@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Date;
 import com.google.gson.*;
+import com.google.gson.stream.JsonReader;
 
 class ServerControl {
     ConcurrentSkipListSet<UserDescription> users = null;
@@ -388,6 +389,7 @@ class ServerControl {
         String result;
         String receipt;
         String copy;
+        JsonParser parser=new JsonParser();
         int receipts = 0;
 
         try {
@@ -414,7 +416,7 @@ class ServerControl {
                 }
 
                 result += "{\"date\":" + m.group( 3 ) + ",\"id\":" + m.group( 2 ) + ",";
-                result += "\"receipt\":\"" + receipt  + "\"}";
+                result += "\"receipt\":" + parser.parse(receipt)  + "}";
                 receipts++;
             }
         }
