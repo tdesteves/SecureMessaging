@@ -102,15 +102,14 @@ public class Client {
 	public static void initExchange() throws Exception{
 		
 		//Get private key for message signature
-		KeyPair pair = clientSec.getKeys("AB");
+		KeyPair pair = clientSec.getKeys(ccReader.getBI());
 		pvKey = pair.getPrivate();
 		pubKey = pair.getPublic();
-		
-		System.out.println("Chave:"+ Base64.getEncoder().encodeToString(pubKey.getEncoded()));
+
 		
 		JsonObject init= new JsonObject();
 		init.addProperty("type", "create");
-		init.addProperty("uuid", "10"); 
+		init.addProperty("uuid", ccReader.getBI()); 
 		init.addProperty("pubKey", Base64.getEncoder().encodeToString(pubKey.getEncoded()));
 		
 		byte[] initSend = clientSec.encryptMessage(init.toString());
@@ -214,8 +213,12 @@ public class Client {
 		JsonObject receipt = new JsonObject();
 		JsonObject receiptCredentials = new JsonObject();
 		
-		receiptCredentials.addProperty("message", message);
-		receiptCredentials.addProperty("signed",Base64.getEncoder().encodeToString(clientSec.signMessage(message.getBytes(), ccReader.getPrivateKey())));
+		byte[] encryptedMessage = clientSec.encryptToDst(message.getBytes(), keyToUse);
+		
+		byte[] messageSigned = clientSec.signMessage(encryptedMessage, ccReader.getPrivateKey());
+		
+		receiptCredentials.addProperty("message",Base64.getEncoder().encodeToString((encryptedMessage)));
+		receiptCredentials.addProperty("signed",Base64.getEncoder().encodeToString(messageSigned));
 		receiptCredentials.addProperty("key",Base64.getEncoder().encodeToString(ccReader.getPublicKey().getEncoded()));
 		
 		receipt.addProperty("type", "receipt");
@@ -223,8 +226,6 @@ public class Client {
 		receipt.addProperty("msg", messageId.toString());
 		receipt.addProperty("receipt", receiptCredentials.toString());
 		
-		
-		//byte[] sendReceipt = clientSec.encryptToDst(receipt.toString().getBytes(),keyToUse);
 		byte[] toServerReceipt = clientSec.encryptMessage(receipt.toString());
 		
 		byte[] receiptSigned= clientSec.signMessage(toServerReceipt, pvKey);
@@ -377,7 +378,7 @@ public class Client {
 			byte[] statusSigned= clientSec.signMessage(sendStatus,  pvKey);
 			sendCommand(sendStatus, statusSigned, pubKey);
 			System.out.println();
-			if(results.readReceipts(readResult().getAsJsonObject(), clientSec)) {
+			if(results.readReceipts(readResult().getAsJsonObject(), clientSec, pvKey)) {
 				break;
 			}else
 				menu();			

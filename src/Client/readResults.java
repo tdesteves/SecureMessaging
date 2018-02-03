@@ -68,11 +68,13 @@ public class readResults {
 		
 	}
 	
-	public boolean readReceipts(JsonObject receipt, ClientSecurity clientSec) throws Exception{
-		
-	
+	public boolean readReceipts(JsonObject receipt, ClientSecurity clientSec, PrivateKey pvKey) throws Exception{
 		
 		JsonObject array = receipt.getAsJsonObject("result");
+		
+		String ogMessage = array.get("msg").getAsString();
+		
+		System.out.println("Mensagem original: " + ogMessage);
 		
 		JsonArray rcpt = array.getAsJsonArray("receipts");
 		if(rcpt.size()==0) {
@@ -89,16 +91,9 @@ public class readResults {
 			
 			System.out.println("Date: "+ tmp.get("date"));
 			System.out.println("Id: "+ tmp.get("id"));
-			System.out.println("Signed: "+ clientSec.verifyMessage(rcp.get("receipt").getAsJsonObject().toString().getBytes()));
+			System.out.println("Signed: "+ clientSec.verifyReceipt(rcp.get("receipt").toString().getBytes(), ogMessage));
 			return true;
 		}
-		/*JsonArray rcps = array.get("receipts").getAsJsonArray();
-		JsonObject tmp = rcps.get(0).getAsJsonObject();
-		//System.out.println("Message: " + array.get("message").getAsString());
-		System.out.println("Date: "+ tmp.get("date"));
-		System.out.println("Id: "+ tmp.get("id"));
-		System.out.println("Seen by: "+ tmp.get("receipt"));
-		return true;*/
 			
 		
 	}

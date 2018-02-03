@@ -251,6 +251,30 @@ public class ClientSecurity{
 			
 		}
 		
+		public boolean verifyReceipt(byte[] receipt, String ogMessage) throws Exception {
+			
+			String cmdAsString = new String(receipt);
+			JsonElement data =  new JsonParser().parse(cmdAsString);
+			JsonElement message = data.getAsJsonObject().get("message");
+			JsonElement signedMsg = data.getAsJsonObject().get("signed");
+			JsonElement key = data.getAsJsonObject().get("key");
+			
+			Signature signAlg = Signature.getInstance("SHA1withRSA");
+			KeyFactory keyGen = KeyFactory.getInstance("RSA");
+			EncodedKeySpec publicKey= new X509EncodedKeySpec(Base64.getDecoder().decode(key.getAsString()));
+			PublicKey pub = keyGen.generatePublic(publicKey);
+			
+			System.out.println("JSON: "+ cmdAsString);
+			
+			signAlg.initVerify(pub);
+			signAlg.update(Base64.getDecoder().decode(message.getAsString().getBytes()));
+			
+	
+			
+			return signAlg.verify(Base64.getDecoder().decode(signedMsg.getAsString()));
+			
+		}
+		
 	public String digestValue(String value) throws Exception {
 		
 		MessageDigest md = MessageDigest.getInstance("MD5");
