@@ -47,7 +47,7 @@ public class Client {
 	static int user=ThreadLocalRandom.current().nextInt(0, 100000000 + 1);
 	static PrivateKey pvKey;
 	static PublicKey pubKey;
-	static int counter=0;
+	static int tag=0;
 	
 	
 	static ClientSecurity clientSec;
@@ -159,8 +159,12 @@ public class Client {
 		cmd.addProperty("message", new String(command));
 		cmd.addProperty("signed",Base64.getEncoder().encodeToString(signedCommand));
 		cmd.addProperty("key", Base64.getEncoder().encodeToString(publicKey.getEncoded()));
-		counter+=1;
-		cmd.addProperty("tag", Integer.toString(counter));
+		
+		//Create hash code from BI
+		tag = clientSec.digestValue(Integer.parseInt(ccReader.getBI())) + 1;
+		cmd.addProperty("tag", Integer.toString(tag));
+		
+		System.out.println("Tag enviado: "+ tag);
 		
 		
 		byte[] send =cmd.toString().getBytes("UTF-8");
@@ -184,14 +188,15 @@ public class Client {
 					String cmdAsString = new String(message);
 					JsonElement tmp =  new JsonParser().parse(cmdAsString);
 					JsonElement ogMessage = tmp.getAsJsonObject().get("message");
-					JsonElement tag = tmp.getAsJsonObject().get("tag");
-					if(tag.getAsInt() == counter+1) {
+					JsonElement tagJ = tmp.getAsJsonObject().get("tag");
+					if(tagJ.getAsInt() == tag+1) {
+						System.out.println("Tag recebido: " + tagJ.getAsInt());
+						//tag+=1;
 						byte[] getID = clientSec.decodeMessage(ogMessage.getAsString().getBytes());
 						String userID = clientSec.decryptMessage(getID);
-						System.out.println(userID);
 						data = new JsonParser().parse(userID);
 					}else {
-						System.out.println("Tag:"+ tag.getAsInt());
+						System.out.println("Tag:"+ tagJ.getAsInt());
 						System.out.println("A message was lost! ");
 						menu();
 					}

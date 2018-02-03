@@ -275,10 +275,10 @@ public class ClientSecurity{
 			
 		}
 		
-	public String digestValue(String value) throws Exception {
+	public int digestValue(int value) throws Exception {
 		
-		MessageDigest md = MessageDigest.getInstance("MD5");
+		Integer ala = new Integer(value);
 		
-		return new String(md.digest(value.getBytes()));
+		return ala.hashCode();
 	}
 }

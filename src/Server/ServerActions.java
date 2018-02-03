@@ -92,7 +92,6 @@ class ServerActions implements Runnable {
         			in.readFully(message, 0, message.length);
         			
         			//Verify the signature from received message
-        			//System.out.println("Verificado? : "+ Server.sec.verifyMessage(message));
         			if(Server.sec.verifyMessage(message)==true) {	
         				String ogMessage = Server.sec.decryptMessage(Server.sec.readMessage(message), serverAESKey);
             			// Parsing the message received

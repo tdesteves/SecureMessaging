@@ -153,9 +153,11 @@ public class ServerSecurity {
 		JsonElement key = data.getAsJsonObject().get("key");
 		JsonElement tag = data.getAsJsonObject().get("tag");
 		
+		System.out.println("Tag recebido:"+ tag.getAsInt());
+		
 		counter = tag.getAsInt() +1 ;	
 		
-		System.out.println("Counter no server:"+ tag.getAsInt());
+		System.out.println("Tag enviado:"+ counter);
 		Signature signAlg = Signature.getInstance("SHA1withRSA");
 		KeyFactory keyGen = KeyFactory.getInstance("RSA");
 		EncodedKeySpec publicKey= new X509EncodedKeySpec(Base64.getDecoder().decode(key.getAsString()));
