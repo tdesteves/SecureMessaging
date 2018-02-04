@@ -11,8 +11,6 @@ import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 
-import com.mysql.jdbc.Connection;
-import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
 
 import java.net.ServerSocket;
 import java.io.DataInputStream;

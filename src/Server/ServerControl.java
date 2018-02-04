@@ -9,6 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Date;
 import com.google.gson.*;
+import com.google.gson.stream.JsonReader;
 
 class ServerControl {
     ConcurrentSkipListSet<UserDescription> users = null;
@@ -135,6 +136,17 @@ class ServerControl {
     getUser ( int id ) {
         for (UserDescription u: users) {
             if (u.id == id ) {
+                return u.description;
+            }
+        }
+
+        return null;
+    }
+    
+    synchronized JsonElement
+    getUserInfo ( int uuid ) {
+        for (UserDescription u: users) {
+            if (Integer.parseInt(u.uuid) == uuid ) {
                 return u.description;
             }
         }
@@ -351,7 +363,7 @@ class ServerControl {
     }
 
     void
-    storeReceipt ( int id, String msg, String receipt ) {
+    storeReceipt ( int id, String msg, String receipt) {
         Pattern p = Pattern.compile( "_?+([0-9]+)_([0-9])" );
         Matcher m = p.matcher( msg );
 
@@ -363,7 +375,7 @@ class ServerControl {
         String path = userReceiptBox( Integer.parseInt( m.group( 1 ) ) ) + "/_" + id + "_" + m.group( 2 ) + "_" + System.currentTimeMillis();
 
         try {
-            saveOnFile ( path, receipt );
+            saveOnFile ( path, receipt);
         } catch (Exception e) {
             System.err.println( "Cannot create receipt file " + path + ": " + e );
         }
@@ -377,6 +389,7 @@ class ServerControl {
         String result;
         String receipt;
         String copy;
+        JsonParser parser=new JsonParser();
         int receipts = 0;
 
         try {
@@ -403,7 +416,7 @@ class ServerControl {
                 }
 
                 result += "{\"date\":" + m.group( 3 ) + ",\"id\":" + m.group( 2 ) + ",";
-                result += "\"receipt\":\"" + receipt  + "\"}";
+                result += "\"receipt\":" + parser.parse(receipt)  + "}";
                 receipts++;
             }
         }

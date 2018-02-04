@@ -12,6 +12,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPair;
 import java.util.Arrays;
 import java.util.Base64;
 
@@ -20,9 +21,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 import com.google.gson.*;
 import com.google.gson.stream.*;
-import com.mysql.fabric.xmlrpc.base.Array;
-import com.mysql.jdbc.Connection;
-import com.mysql.jdbc.Statement;
+
 
 class ServerActions implements Runnable {
 
@@ -34,8 +33,10 @@ class ServerActions implements Runnable {
     ServerControl registry;
     SecretKeySpec serverAESKey;
     ServerSecurity sec;
+    int counter=0;
    
     byte[] message;
+    String keyToStore;
 
     //Construtor para os novos users
     ServerActions ( Socket c, ServerControl r, ServerSecurity sec) throws Exception {
@@ -56,6 +57,7 @@ class ServerActions implements Runnable {
 				out.writeInt(toSend.length);
 				out.write(toSend);
 				serverAESKey = sec.serverDoPhase();
+				
 			}					
 
 		} catch (Exception e) {
@@ -88,43 +90,18 @@ class ServerActions implements Runnable {
         		if(length > 0) {
         			message = new byte[length];
         			in.readFully(message, 0, message.length);
-        			byte[] cmd = Server.sec.decodeMessage(message);
-        			//String ogMessage = Server.sec.decryptMessage(test, serverAESKey);
-        			// Parsing the message received
-        			//JsonElement data = new JsonParser().parse(ogMessage);
-        			//if (data.isJsonObject()) {
-        				//return data.getAsJsonObject();
-        			//}
-        			System.out.println("ogMessage: " + cmd);
-        		}
-        		int length2 = in.readInt();
-        		if(length > 0) {
-        			message = new byte[length2];
-        			in.readFully(message, 0, message.length);
-        			byte[] signedMessage = message;
-        			//String ogMessage = Server.sec.decryptMessage(test, serverAESKey);
-        			// Parsing the message received
-        			//JsonElement data = new JsonParser().parse(ogMessage);
-        			//if (data.isJsonObject()) {
-        			//	return data.getAsJsonObject();
-        			//}
-        			System.out.println("Signed: " + signedMessage);
-        		}
-        		int length3 = in.readInt();
-        		if(length > 0) {
-        			message = new byte[length3];
-        			in.readFully(message, 0, message.length);
-        			byte[] pubKey = message;
-        			/*String ogMessage = Server.sec.decryptMessage(test, serverAESKey);
-        			// Parsing the message received
-        			JsonElement data = new JsonParser().parse(ogMessage);
-        			if (data.isJsonObject()) {
-        				return data.getAsJsonObject();
-        			}*/
-        			System.out.println("PubKey: " + pubKey);
-        		}
-        		
-			
+        			
+        			//Verify the signature from received message
+        			if(Server.sec.verifyMessage(message)==true) {	
+        				String ogMessage = Server.sec.decryptMessage(Server.sec.readMessage(message), serverAESKey);
+            			// Parsing the message received
+            			JsonElement data = new JsonParser().parse(ogMessage);
+            			if (data.isJsonObject()) {
+            				return data.getAsJsonObject();
+            			}
+            			
+        			}	
+        		}	
 			System.err.print ( "Error while reading command from socket (not a JSON object), connection will be shutdown\n" );
 			return null;
         } catch (Exception e) {
@@ -153,16 +130,24 @@ class ServerActions implements Runnable {
 
         msg += "}\n";
 
-        try {
-            System.out.print( "Send result: " + msg );
+        try {         
+        	JsonObject rsp = new JsonObject();
+        	KeyPair pair = Server.sec.generateSignKeys();
             byte[] encryptedMsg = Server.sec.encryptMessage(msg, serverAESKey);
-            out.writeInt(encryptedMsg.length);
-            out.write(encryptedMsg);
+            byte[] signedMsg = Server.sec.signMessage(encryptedMsg, pair.getPrivate());
+            rsp.addProperty("message", new String(encryptedMsg));
+            rsp.addProperty("signed", Base64.getEncoder().encodeToString(signedMsg));
+            rsp.addProperty("key", Base64.getEncoder().encodeToString(pair.getPublic().getEncoded()));
+            rsp.addProperty("tag", Server.sec.counter);
+            System.out.println("Result: " + rsp.toString());
+            byte[] send =rsp.toString().getBytes("UTF-8");
+            out.writeInt(send.length);
+            out.write(send);
         } catch (Exception e ) {}
     }
 
     void
-    executeCommand ( JsonObject data ) {
+    executeCommand ( JsonObject data ) throws Exception {
         JsonElement cmd = data.get( "type" );
         UserDescription me;
 
@@ -184,12 +169,20 @@ class ServerActions implements Runnable {
 
             if (registry.userExists( uuid.getAsString() )) {
                 System.err.println ( "User already exists: " + data );
-                sendResult( null, "\"uuid already exists\"" );
+                //sendResult( null, "\"uuid already exists\"" );
+                JsonElement id = registry.getUserInfo(uuid.getAsInt()).getAsJsonObject().get("id");
+                UserDescription user = new UserDescription( id.getAsInt() , registry.getUserInfo(uuid.getAsInt()));
+                JsonElement key=user.description.getAsJsonObject().get("sec-data");
+                /*System.out.println("Chave que foi Guardada Codificada:"+ key);
+                serverAESKey = Server.sec.decodeStoredKey(key.getAsString());
+                System.out.println("Chave que foi Guardada Descodificada:"+ serverAESKey);*/
+                sendResult( "\"result\":\"" + id + "\"", null );
                 return;
             }
-
+            
             data.remove ( "type" );
-            data.addProperty("sec-data", Base64.getEncoder().encodeToString(serverAESKey.getEncoded()));
+            data.addProperty("sec-data", data.get("pubKey").getAsString());
+            data.remove("pubKey");
             me = registry.addUser( data );
 
             sendResult( "\"result\":\"" + me.id + "\"", null );
@@ -277,7 +270,6 @@ class ServerActions implements Runnable {
                 return;
             }
 
-            // Save message and copy
 
             String response = registry.sendMessage( srcId, dstId,
                                                     msg.getAsString(),
@@ -310,14 +302,14 @@ class ServerActions implements Runnable {
             if (registry.messageExists( fromId, msg.getAsString() ) == false &&
                 registry.messageExists( fromId, "_" + msg.getAsString() ) == false) {
                 System.err.println ( "Unknown message for \"recv\" request: " + data );
-                sendResult( null, "\"wrong parameters\"" );
+                sendResult(null , "\"wrong parameters\"");
                 return;
             }
 
             // Read message
 
             String response = registry.recvMessage( fromId, msg.getAsString() );
-
+            
             sendResult( "\"result\":" + response, null );
             return;
         }
@@ -328,6 +320,7 @@ class ServerActions implements Runnable {
             JsonElement id = data.get( "id" );
             JsonElement msg = data.get( "msg" );
             JsonElement receipt = data.get( "receipt" );
+            JsonElement key = data.get("key");
 
             if (id == null || msg == null || receipt == null) {
                 System.err.print ( "Badly formated \"receipt\" request: " + data );
@@ -372,6 +365,8 @@ class ServerActions implements Runnable {
             // Get receipts
 
             String response = registry.getReceipts( fromId, msg.getAsString() );
+            
+            System.out.println("Receipt: "+ response);
 
             sendResult( "\"result\":" + response, null );
             return;
@@ -392,7 +387,12 @@ class ServerActions implements Runnable {
 				return;
 
 			}
-			executeCommand(cmd);
+			try {
+				executeCommand(cmd);
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 
 	}

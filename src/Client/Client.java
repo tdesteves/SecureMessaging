@@ -14,6 +14,9 @@ import java.net.UnknownHostException;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyStore;
+import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.Provider.Service;
 import java.security.PublicKey;
@@ -26,9 +29,11 @@ import java.util.TreeSet;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.logging.ConsoleHandler;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonStreamParser;
 import com.google.gson.stream.JsonReader;
 
 public class Client {
@@ -40,6 +45,9 @@ public class Client {
 	static DataOutputStream dOut;
 	static DataInputStream dIn;
 	static int user=ThreadLocalRandom.current().nextInt(0, 100000000 + 1);
+	static PrivateKey pvKey;
+	static PublicKey pubKey;
+	static int tag=0;
 	
 	
 	static ClientSecurity clientSec;
@@ -55,13 +63,7 @@ public class Client {
 		String f = currentDirectory.getAbsolutePath() + "/src/Client/CartaoCidadao.cfg";
 		Provider p = new sun.security.pkcs11.SunPKCS11( f );
 		Security.addProvider(p);
-		 for (Provider provider : Security.getProviders()) {
-	            System.out.println("Provider: " + provider.getName());
-	            for (Provider.Service service : provider.getServices()) {
-	                System.out.println("  Algorithm: " + service.getAlgorithm());
-	            }
-	        }
-		//loginMenu();
+		loginMenu();
 		createConn();
 		initExchange();
 		menu();
@@ -84,6 +86,7 @@ public class Client {
 		         dIn.readFully(message, 0, message.length); // read the message
 		         clientSec.acceptKey(message);
 		         clientSec.doPhase();
+		     
 		     }
 		     
 		   } catch (UnknownHostException e) {
@@ -98,29 +101,45 @@ public class Client {
 
 	public static void initExchange() throws Exception{
 		
+		//Get private key for message signature
+		KeyPair pair = clientSec.getKeys(ccReader.getBI());
+		pvKey = pair.getPrivate();
+		pubKey = pair.getPublic();
+
+		
 		JsonObject init= new JsonObject();
 		init.addProperty("type", "create");
-		init.addProperty("uuid", user);
+		init.addProperty("uuid", ccReader.getBI()); 
+		init.addProperty("pubKey", Base64.getEncoder().encodeToString(pubKey.getEncoded()));
 		
 		byte[] initSend = clientSec.encryptMessage(init.toString());
 		byte[] signed = clientSec.signMessage(initSend, ccReader.getPrivateKey());
-		sendCommand(initSend, signed, clientSec.pub);
-		//dOut.writeInt(initSend.length);
-		//dOut.write(initSend);
-		
+		sendCommand(initSend, signed, ccReader.getPublicKey());
 	
+		
 		int length = dIn.readInt(); // read length of incoming message
+		
+		
 		if (length > 0) {
 			byte[] message = new byte[length];
-			dIn.readFully(message, 0, message.length); // read the message		
-			byte[] getID = clientSec.decodeMessage(message);
-			String userID = clientSec.decryptMessage(getID);
-			JsonElement data = new JsonParser().parse(userID);
-			uuid = data.getAsJsonObject().get("result");
+			dIn.readFully(message, 0, message.length); // read the message
+
+			if(clientSec.verifyMessage(message)) {
+				String cmdAsString = new String(message);
+				JsonElement tmp =  new JsonParser().parse(cmdAsString);
+				JsonElement ogMessage = tmp.getAsJsonObject().get("message");
+				byte[] getID = clientSec.decodeMessage(ogMessage.getAsString().getBytes());
+				String userID = clientSec.decryptMessage(getID);
+				JsonElement data = new JsonParser().parse(userID);
+				uuid = data.getAsJsonObject().get("result");
+			}else {
+				System.out.println("Message not validated! Returning to Menu...");
+				menu();
+			}
+			
 			
 		}
 		
-	
 	}
 
 	public static void closeConn() throws IOException {
@@ -130,16 +149,33 @@ public class Client {
 		socket.close();
 	}
 	
+	//This method puts everything in JSON format following the structure:
+	//{	message:"",
+	//	signed:"",
+	//	key:""	}
 	public static void sendCommand(byte[] command, byte[] signedCommand, PublicKey publicKey) throws Exception {
 		
-		dOut.writeInt(command.length);
-		dOut.write(command);
-		dOut.write(signedCommand, 0, signedCommand.length);
-		//dOut.write(publicKey);
+		JsonObject cmd = new JsonObject();
+		cmd.addProperty("message", new String(command));
+		cmd.addProperty("signed",Base64.getEncoder().encodeToString(signedCommand));
+		cmd.addProperty("key", Base64.getEncoder().encodeToString(publicKey.getEncoded()));
+		
+		//Create hash code from BI
+		tag = clientSec.digestValue(Integer.parseInt(ccReader.getBI())) + 1;
+		cmd.addProperty("tag", Integer.toString(tag));
+		
+		System.out.println("Tag enviado: "+ tag);
+		
+		
+		byte[] send =cmd.toString().getBytes("UTF-8");
+		
+		dOut.writeInt(send.length);
+		dOut.write(send);
 		dOut.flush();
 	}
 	
-	public static String readResult() throws Exception{
+	//Method that reads the message received from the Server
+	public static JsonElement readResult() throws Exception{
 		
 		JsonElement data = null;
 		
@@ -148,48 +184,69 @@ public class Client {
 			if (length > 0) {
 				byte[] message = new byte[length];
 				dIn.readFully(message, 0, message.length); // read the message
-				byte[] getID = clientSec.decodeMessage(message);
-				String userID = clientSec.decryptMessage(getID);
-				data = new JsonParser().parse(userID);
+				if(clientSec.verifyMessage(message)) {
+					String cmdAsString = new String(message);
+					JsonElement tmp =  new JsonParser().parse(cmdAsString);
+					JsonElement ogMessage = tmp.getAsJsonObject().get("message");
+					JsonElement tagJ = tmp.getAsJsonObject().get("tag");
+					if(tagJ.getAsInt() == tag+1) {
+						System.out.println("Tag recebido: " + tagJ.getAsInt());
+						//tag+=1;
+						byte[] getID = clientSec.decodeMessage(ogMessage.getAsString().getBytes());
+						String userID = clientSec.decryptMessage(getID);
+						data = new JsonParser().parse(userID);
+					}else {
+						System.out.println("Tag:"+ tagJ.getAsInt());
+						System.out.println("A message was lost! ");
+						menu();
+					}
+						
+					
+				}else {
+					System.out.println("Message not validated! Returning to Menu...");
+					menu();
+				}
+				
 
 			}
-			return data.toString();
+			return data;
 	
 	}
 	
-	public static void sendReceipt(String message) throws Exception {
+	//Method to send receipt - id is given by the CC
+	public static void sendReceipt(String messageId, String message, PublicKey keyToUse) throws Exception {
 		JsonObject receipt = new JsonObject();
+		JsonObject receiptCredentials = new JsonObject();
+		
+		byte[] encryptedMessage = clientSec.encryptToDst(message.getBytes(), keyToUse);
+		
+		byte[] messageSigned = clientSec.signMessage(encryptedMessage, ccReader.getPrivateKey());
+		
+		receiptCredentials.addProperty("message",Base64.getEncoder().encodeToString((encryptedMessage)));
+		receiptCredentials.addProperty("signed",Base64.getEncoder().encodeToString(messageSigned));
+		receiptCredentials.addProperty("key",Base64.getEncoder().encodeToString(ccReader.getPublicKey().getEncoded()));
 		
 		receipt.addProperty("type", "receipt");
 		receipt.addProperty("id", uuid.getAsString());
-		receipt.addProperty("msg", message);
-		receipt.addProperty("receipt", "Vista.");
+		receipt.addProperty("msg", messageId.toString());
+		receipt.addProperty("receipt", receiptCredentials.toString());
 		
-		byte[] sendRecv = clientSec.encryptMessage(receipt.toString());
-		dOut.writeInt(sendRecv.length);
-		dOut.write(sendRecv);
-		dOut.flush();
+		byte[] toServerReceipt = clientSec.encryptMessage(receipt.toString());
+		
+		byte[] receiptSigned= clientSec.signMessage(toServerReceipt, pvKey);
+		sendCommand(toServerReceipt, receiptSigned, pubKey);
+
+		
+		
 	}
 
-	public static void signatureAggreement() throws Exception {
-		
-		byte[] toSend = clientSec.initiateDH();
-		dOut.writeInt(toSend.length);
-		dOut.write(toSend);
-		
-		int length = dIn.readInt();                    // read length of incoming message
-	     if(length>0) {
-	         byte[] message = new byte[length];
-	         dIn.readFully(message, 0, message.length); // read the message
-	         clientSec.acceptKey(message);
-	         clientSec.doPhase();
-	     }
-		
-	}
 	
 	public static void menu() throws Exception {
 		
+		System.out.println();
 		System.out.println("User ID:" + uuid);
+		
+		readResults results = new readResults();
 		
 		
 		//Creates new message every time the menu is opened
@@ -204,54 +261,77 @@ public class Client {
 		System.out.println("4 - Send a New Message");
 		System.out.println("5 - Receive Messages");
 		System.out.println("6 - Check Status of Sent Messages");
+		System.out.println("7 - LogOut");
 		
 		int op = scanner.nextInt();
+		
+		
 		
 		switch(op) {
 		case 1:
 			//LIST
 			message.addProperty("type", "list");
-			//message.addProperty("id",uuid.getAsString());
+			System.out.println("What user do you wish to find?");
+			String wishID = scanner.nextLine();
+			message.addProperty("id",wishID);
+			if(wishID.equals(""))
+				message.remove("id");
 			byte[] sendList = clientSec.encryptMessage(message.toString());
-			byte[] m= clientSec.signMessage(sendList, ccReader.getPrivateKey());
-			sendCommand(sendList, m, clientSec.pub);
-			System.out.println(readResult());
+			byte[] listSigned= clientSec.signMessage(sendList,  pvKey);
+			System.out.println(pvKey.toString());
+			sendCommand(sendList, listSigned, pubKey);
+			results.readListResult(readResult().getAsJsonObject());
 			break;
 		case 2:
 			//NEW
 			message.addProperty("type", "new");
 			message.addProperty("id",uuid.getAsString());
 			byte[] sendNew = clientSec.encryptMessage(message.toString());
-			//sendCommand(sendNew);
-			System.out.println(readResult());
+			byte[] newSigned= clientSec.signMessage(sendNew,  pvKey);
+			sendCommand(sendNew, newSigned, pubKey);
+			results.readNewMgs(readResult().getAsJsonObject());
+			//System.out.println(readResult());
 			break;
 		case 3:
 			//ALL
 			message.addProperty("type", "all");
 			message.addProperty("id",uuid.getAsString());
 			byte[] sendAll = clientSec.encryptMessage(message.toString());
-			//sendCommand(clientSec.sendIV());
-			//sendCommand(sendAll);
-			System.out.println(readResult());
+			byte[] allSigned= clientSec.signMessage(sendAll,  pvKey);
+			sendCommand(sendAll, allSigned, pubKey);
+			results.readAllMsg(readResult().getAsJsonObject());
+			//System.out.println(readResult());
 			break;
 		case 4:
 			//SEND
 			//Message Creation
-			message.addProperty("type", "send");
-			message.addProperty("src",uuid.getAsString());
+			
 			System.out.println("Destination ID?");
 			int dst = scanner.nextInt();
+			//Send list to get the pubKey for message encryption
+			message.addProperty("type", "list");
+			message.addProperty("id",dst);
+			byte[] sendReq = clientSec.encryptMessage(message.toString());
+			byte[] reqSigned= clientSec.signMessage(sendReq,  pvKey);
+			sendCommand(sendReq, reqSigned, pubKey);
+			JsonElement dstPubKey=readResult().getAsJsonObject().get("data").getAsJsonArray().get(0).getAsJsonObject().get("sec-data");
+			PublicKey keyToUse = clientSec.getDstKey(dstPubKey);
+			//
+			message = new JsonObject();
+			message.addProperty("type", "send");
+			message.addProperty("src",uuid.getAsString());
 			message.addProperty("dst", dst);
 			scanner.nextLine();
 			System.out.println("Write your message: \n");
 			String msg = scanner.nextLine();
-			
 			//Message itself is encoded to Base64
-			message.addProperty("msg", clientSec.encodeMessage(msg));
-			message.addProperty("copy", clientSec.encodeMessage(msg));
+			String m = Base64.getEncoder().encodeToString(clientSec.encryptToDst(msg.getBytes(), keyToUse));
+			message.addProperty("msg", m);
+			message.addProperty("copy", m);
 			//Encrypt and then encode to BASE 64 message to Send to Server (AES)
 			byte[] toSend = clientSec.encryptMessage(message.toString());
-			//sendCommand(toSend);
+			byte[] toSendSigned= clientSec.signMessage(toSend,  ccReader.getPrivateKey());
+			sendCommand(toSend, toSendSigned, ccReader.getPublicKey());
 			
 			//Reads the JSON received by Server
 			System.out.println(readResult());
@@ -259,19 +339,37 @@ public class Client {
 			break;
 		case 5:
 			//RECV
-			message.addProperty("type", "recv");
-			message.addProperty("id",uuid.getAsString() );
-			scanner.nextLine();
-			System.out.println("What message would you like to read?");
-			String targetMsg = scanner.nextLine();
-			message.addProperty("msg", targetMsg);
-			scanner.nextLine();
-			byte[] sendRecv = clientSec.encryptMessage(message.toString());	
-			//sendCommand(sendRecv);
-			System.out.println("Sending receipt...");
-			sendReceipt(targetMsg);
-			JsonObject obj = new JsonParser().parse(readResult()).getAsJsonObject();
-			System.out.println("Mensagem: "+ clientSec.decodeMessage(obj));
+				message.addProperty("type", "recv");
+				message.addProperty("id",uuid.getAsString() );
+				scanner.nextLine();
+				System.out.println("What message would you like to read?");
+				String targetMsg = scanner.nextLine();
+				message.addProperty("msg", targetMsg);
+				scanner.nextLine();
+				byte[] sendRecv = clientSec.encryptMessage(message.toString());	
+				byte[] recvSigned= clientSec.signMessage(sendRecv,  pvKey);
+				sendCommand(sendRecv, recvSigned,pubKey);
+				JsonObject obj = readResult().getAsJsonObject();	
+				
+				if(results.readMessage(obj)) {
+					message.addProperty("type", "list");
+					message.addProperty("id",obj.get("result").getAsJsonArray().get(0).getAsString());
+					byte[] sendRec = clientSec.encryptMessage(message.toString());
+					byte[] recSigned= clientSec.signMessage(sendRec,  pvKey);
+					sendCommand(sendRec, recSigned, pubKey);
+					JsonElement dstRecPubKey=readResult().getAsJsonObject().get("data").getAsJsonArray().get(0).getAsJsonObject().get("sec-data");
+					PublicKey keyToUseRec = clientSec.getDstKey(dstRecPubKey);
+					byte[] messageEncoded = Base64.getDecoder().decode(obj.get("result").getAsJsonArray().get(1).getAsString().getBytes());
+					String mensagem=new String(clientSec.decryptStoredMsg(messageEncoded, pvKey));
+					System.out.println("Mensagem: "+ mensagem);
+					
+					System.out.println("Sending receipt...");
+					sendReceipt(targetMsg,mensagem, keyToUseRec);
+				}else {
+					menu();
+				}
+			
+				
 			break;
 		case 6:
 			//STATUS
@@ -282,8 +380,15 @@ public class Client {
 			String msge = scanner.nextLine();
 			message.addProperty("msg", msge);
 			byte[] sendStatus = clientSec.encryptMessage(message.toString());
-			//sendCommand(sendStatus);
-			System.out.println(readResult());			
+			byte[] statusSigned= clientSec.signMessage(sendStatus,  pvKey);
+			sendCommand(sendStatus, statusSigned, pubKey);
+			System.out.println();
+			if(results.readReceipts(readResult().getAsJsonObject(), clientSec, pvKey)) {
+				break;
+			}else
+				menu();			
+		case 7:
+			closeConn();
 		}
 		menu();
 		
@@ -300,6 +405,8 @@ public class Client {
 				System.out.println("Citizen Card not inserted.");
 				Thread.currentThread().wait(5000);
 			}
+			
+		
 		}	
 		
 		

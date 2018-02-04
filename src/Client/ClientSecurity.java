@@ -7,12 +7,14 @@ import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.Provider;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Signature;
+import java.security.spec.EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
@@ -28,24 +30,28 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import javax.swing.text.IconView;
 
+import org.bouncycastle.crypto.tls.HandshakeType;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mysql.fabric.xmlrpc.base.Array;
+import com.google.gson.JsonParser;
 
 public class ClientSecurity{ 
 
 	KeyAgreement clientAgree;
 	PublicKey serverPubKey;
 	SecretKeySpec clientAESKey;
-	IvParameterSpec iv;
 	//private static final String alphabet= "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 	Cipher clientCipher;
 	ccReader reader;
 	 byte[] digest;
 	 PublicKey pub;
+	 byte[] iv;
+	 int ivSize=16;
+	IvParameterSpec ivParams;
 	
 	//Initiates DH Agreement
 	public byte[] initiateDH() throws Exception {
@@ -56,7 +62,6 @@ public class ClientSecurity{
 		
 		clientAgree = KeyAgreement.getInstance("DH");
 		clientAgree.init(clientKeyPair.getPrivate());
-		
 		
 		//Encode public key and send it
 		byte[] clientPubKey = clientKeyPair.getPublic().getEncoded();
@@ -77,6 +82,7 @@ public class ClientSecurity{
 	public void doPhase() throws Exception{
 		
 		clientAgree.doPhase(serverPubKey, true);
+	
         
         byte[] clientSharedSecret = clientAgree.generateSecret();
         
@@ -88,19 +94,39 @@ public class ClientSecurity{
 	//This function receives a plain message and returns a ciphered then encoded one
 	public byte[] encryptMessage (String message) throws Exception{
 		
-		clientCipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-		clientCipher.init(Cipher.ENCRYPT_MODE, clientAESKey);
+		iv = new byte[ivSize];
+		SecureRandom random = new SecureRandom();
+		random.nextBytes(iv);
+		ivParams = new IvParameterSpec(iv);
+		
+		clientCipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+		clientCipher.init(Cipher.ENCRYPT_MODE, clientAESKey, ivParams);
 		byte[] cipher = clientCipher.doFinal(message.getBytes());
 		
-		return encodeJSON(cipher);
+		//Combine message with Parameters
+		byte[] msg = new byte[cipher.length + ivSize ];
+		System.arraycopy(iv, 0, msg, 0, ivSize);
+		System.arraycopy(cipher, 0, msg, ivSize, cipher.length);
+		
+		return encodeJSON(msg);
 	}
 	
 	//Receives bytes decoded and then decrypts the message inside
 	public String decryptMessage(byte[] message) throws Exception {
+		
+		//Extract Parameters
+				iv= new byte[ivSize];
+				System.arraycopy(message, 0, iv, 0, iv.length);
+				ivParams = new IvParameterSpec(iv);
+				
+				int encryptedSize = message.length-ivSize;
+				byte[] encrypted = new byte[encryptedSize];
+				System.arraycopy(message, ivSize , encrypted, 0, encryptedSize);
+				
 
-		Cipher resultCipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
-		resultCipher.init(Cipher.DECRYPT_MODE, clientAESKey);
-		byte[] recovered = resultCipher.doFinal(message);
+		Cipher resultCipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+		resultCipher.init(Cipher.DECRYPT_MODE, clientAESKey, ivParams);
+		byte[] recovered = resultCipher.doFinal(encrypted);
 		String result = new String(recovered);
 
 		return result;
@@ -126,8 +152,10 @@ public class ClientSecurity{
 		return msgEncoded;
 	}
 	
+	
 	//Encodes byte arrays (this is for JSON message exchanged)
 	public byte[] encodeJSON (byte[] message) {
+		
 		byte[] jsonEncoded = Base64.getEncoder().encode(message);
 		
 		return jsonEncoded;
@@ -142,38 +170,115 @@ public class ClientSecurity{
 		return toSend;
 	}
 	
+	public KeyPair getKeys(String seed) throws Exception {
+		
+		SecureRandom rand = SecureRandom.getInstance("SHA1PRNG", "SUN");
+		
+		KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
+		rand.setSeed(seed.hashCode());
+		keyGen.initialize(2048,rand);
+		KeyPair pair = keyGen.generateKeyPair();
+		
+		return pair;
+	}
+	
 	//Function to sign Message
 	public byte[] signMessage(byte[] message, PrivateKey key) throws Exception {
 		
-		Signature signAlg = Signature.getInstance("NONEwithRSA", "SunPKCS11-PTeID");
+		Signature signAlg = Signature.getInstance("SHA1withRSA");
 		signAlg.initSign(key);
 		signAlg.update(message);
 		byte[] signedMessage = signAlg.sign();
 		
+		
 		return signedMessage;
 	}
 	
-	public byte[] generateMac(byte[] message) {
-		try {
-				
-		    KeyGenerator keyGen = KeyGenerator.getInstance("HmacMD5");
-		    SecretKey key = keyGen.generateKey();
-		    Mac mac = Mac.getInstance(key.getAlgorithm());
-		    mac.init(key);
-		    
-		    // create a digest from the byte array
-		    digest= mac.doFinal(message);
-		    
-  
-		}
-		catch (NoSuchAlgorithmException e) {
-			System.out.println("No Such Algorithm:" + e.getMessage());
-			
-		}
-		catch (InvalidKeyException e) {
-			System.out.println("Invalid Key:" + e.getMessage());
-		}
-		return digest;
+	public byte[] decryptStoredMsg(byte[] msg, PrivateKey pvKey)throws Exception {
+		
+		
+		Cipher cipher = Cipher.getInstance("RSA");
+		cipher.init(Cipher.DECRYPT_MODE, pvKey);
+		
+		byte[] toRead = cipher.doFinal(msg);
+		
+		return toRead;
 	}
 	
+	//Creation of keys for message decryption end to end
+	public PublicKey getDstKey(JsonElement keyAsJsonElem)throws Exception {
+		String key = keyAsJsonElem.getAsString();
+		
+		byte[] temp = Base64.getDecoder().decode(key);
+		KeyFactory keyGen = KeyFactory.getInstance("RSA");
+		X509EncodedKeySpec publicKey= new X509EncodedKeySpec(temp);
+		PublicKey pub = keyGen.generatePublic(publicKey);
+		
+		return pub;
+	}
+	
+	//This function encrypts the message itself using the public key from the dst Client, stored in the server
+	public byte[] encryptToDst(byte[] msg, PublicKey key) throws Exception {
+		
+		Cipher msgCipher = Cipher.getInstance("RSA");
+		msgCipher.init(Cipher.ENCRYPT_MODE, key);
+		
+		byte[] message = msgCipher.doFinal(msg);
+		
+		return message;
+	}
+	
+	//Function used to verify if the client message belongs to the original owner
+		public boolean verifyMessage(byte[] message) throws Exception {
+			
+			String cmdAsString = new String(message);
+			JsonElement data =  new JsonParser().parse(cmdAsString);
+			JsonElement ogMessage = data.getAsJsonObject().get("message");
+			JsonElement signedMsg = data.getAsJsonObject().get("signed");
+			JsonElement key = data.getAsJsonObject().get("key");
+				
+			
+			Signature signAlg = Signature.getInstance("SHA1withRSA");
+			KeyFactory keyGen = KeyFactory.getInstance("RSA");
+			EncodedKeySpec publicKey= new X509EncodedKeySpec(Base64.getDecoder().decode(key.getAsString()));
+			PublicKey pub = keyGen.generatePublic(publicKey);
+			
+			
+			signAlg.initVerify(pub);
+			signAlg.update(ogMessage.getAsString().getBytes());
+			
+			return signAlg.verify(Base64.getDecoder().decode(signedMsg.getAsString()));
+			
+		}
+		
+		public boolean verifyReceipt(byte[] receipt, String ogMessage) throws Exception {
+			
+			String cmdAsString = new String(receipt);
+			JsonElement data =  new JsonParser().parse(cmdAsString);
+			JsonElement message = data.getAsJsonObject().get("message");
+			JsonElement signedMsg = data.getAsJsonObject().get("signed");
+			JsonElement key = data.getAsJsonObject().get("key");
+			
+			Signature signAlg = Signature.getInstance("SHA1withRSA");
+			KeyFactory keyGen = KeyFactory.getInstance("RSA");
+			EncodedKeySpec publicKey= new X509EncodedKeySpec(Base64.getDecoder().decode(key.getAsString()));
+			PublicKey pub = keyGen.generatePublic(publicKey);
+			
+			System.out.println("JSON: "+ cmdAsString);
+			
+			signAlg.initVerify(pub);
+			signAlg.update(Base64.getDecoder().decode(message.getAsString().getBytes()));
+			
+	
+			
+			return signAlg.verify(Base64.getDecoder().decode(signedMsg.getAsString()));
+			
+		}
+		
+	public int digestValue(int value) throws Exception {
+		
+		Integer ala = new Integer(value);
+		
+		return ala.hashCode();
+	}
 }
